@@ -32,33 +32,33 @@ enum AhaKeyModeSlot: Int, CaseIterable, Codable, Identifiable {
     var subtitle: String {
         switch self {
         case .mode0:
-            "Claude Code · 终端权限 Y/N"
+            "Claude Code · Terminal permission Y/N"
         case .mode1:
             "Cursor · Composer Accept/Reject"
         case .mode2:
             "Codex · ↵ / Esc"
         case .mode3:
-            "custom · 自定义模式"
+            "custom · Custom mode"
         }
     }
 
     var guidance: String {
         switch self {
         case .mode0:
-            "针对 Claude Code 终端权限菜单：Key2 直接输入 Y（同意），Key3 直接输入 N（拒绝）。"
+            "For the Claude Code terminal permission menu: Key2 types Y directly (approve), Key3 types N directly (deny)."
         case .mode1:
-            "针对 Cursor Composer / Agent：Key2 发 ↵、Key3 发 ⌫（与裸键一致）。"
+            "For Cursor Composer / Agent: Key2 sends ↵, Key3 sends ⌫ (same as the bare keys)."
         case .mode2:
-            "针对 Codex 终端审批：Key2 发送 ↵ 确认，Key3 发送 Esc 取消。"
+            "For Codex terminal approval: Key2 sends ↵ to confirm, Key3 sends Esc to cancel."
         case .mode3:
-            "自定义模式：可自由配置所有按键和灯效。"
+            "Custom mode: freely configure all keys and lighting effects."
         }
     }
 
     var guidanceHoverDetail: String? {
         switch self {
         case .mode1:
-            return "若需与「⌘↵ 接受 / ⌘⌫ 拒绝」等组合键一致，请在编辑器里为对应键加修饰，并在 Cursor 设置 → Keyboard Shortcuts 中绑成相同组合。"
+            return "To match combos such as ⌘↵ Accept / ⌘⌫ Reject, add modifiers to the corresponding keys in the editor, then bind the same combos in Cursor Settings → Keyboard Shortcuts."
         case .mode0, .mode2, .mode3:
             return nil
         }
@@ -96,9 +96,9 @@ enum AhaKeyStudioPart: String, CaseIterable, Codable, Identifiable {
     var title: String {
         switch self {
         case .lightBar:
-            "灯条"
+            "Light Bar"
         case .oledDisplay:
-            "LCD 屏幕"
+            "LCD Screen"
         case .key1:
             "Key 1"
         case .key2:
@@ -108,26 +108,26 @@ enum AhaKeyStudioPart: String, CaseIterable, Codable, Identifiable {
         case .key4:
             "Key 4"
         case .toggleSwitch:
-            "拨杆"
+            "Toggle Switch"
         }
     }
 
     var subtitle: String {
         switch self {
         case .lightBar:
-            "AI 状态反馈"
+            "AI Status Feedback"
         case .oledDisplay:
-            "动图显示"
+            "Animated GIF Display"
         case .key1:
-            "语音键"
+            "Voice Key"
         case .key2:
-            "确认键"
+            "Confirm Key"
         case .key3:
-            "取消键"
+            "Cancel Key"
         case .key4:
-            "删除键"
+            "Delete Key"
         case .toggleSwitch:
-            "批准方式"
+            "Approval Mode"
         }
     }
 
@@ -193,13 +193,13 @@ enum AhaKeyKeyRole: Int, CaseIterable, Codable, Identifiable {
     var title: String {
         switch self {
         case .voice:
-            "语音键"
+            "Voice Key"
         case .approve:
-            "确认键"
+            "Confirm Key"
         case .reject:
-            "取消键"
+            "Cancel Key"
         case .submit:
-            "删除键"
+            "Delete Key"
         }
     }
 
@@ -232,13 +232,13 @@ enum AhaKeyKeyRole: Int, CaseIterable, Codable, Identifiable {
     var manualText: String {
         switch self {
         case .voice:
-            "优先用来触发语音输入，用户在软件里看到的是语音软件名，底层仍写成快捷键。"
+            "Primarily used to trigger voice input. The app shows the voice software name, but the underlying value is still stored as a shortcut."
         case .approve:
-            "适合批准、确认、继续执行这类高频动作。"
+            "Best for high-frequency actions such as approving, confirming, or continuing."
         case .reject:
-            "适合拒绝、取消、停止这类相反动作。"
+            "Best for the opposite actions such as rejecting, canceling, or stopping."
         case .submit:
-            "出厂默认 Backspace，适合删除、撤销输入或清理当前内容。"
+            "Factory default is Backspace; good for deleting, undoing input, or clearing the current content."
         }
     }
 }
@@ -317,7 +317,7 @@ struct ShortcutBinding: Codable, Equatable {
         let modifierLabel = orderedModifiers.map(\.symbol).joined()
         let keyLabel = keyCode == 0 ? "" : HIDUsage.name(for: keyCode)
         let combined = modifierLabel + keyLabel
-        return combined.isEmpty ? "未设置" : combined
+        return combined.isEmpty ? "Not Set" : combined
     }
 
     var isConfigured: Bool {
@@ -372,34 +372,34 @@ enum VoicePreset: String, CaseIterable, Codable, Identifiable {
     var title: String {
         switch self {
         case .macOSNative, .claudeCode, .kimiCode:
-            "macOS 原生转写"
+            "macOS Native Transcription"
         case .typeless:
             "Fn/Globe"
         case .wechat:
-            "微信语音"
+            "WeChat Voice"
         case .codex:
             "Codex"
         case .doubao:
-            "豆包输入法"
+            "Doubao Input Method"
         case .custom:
-            "自定义快捷键"
+            "Custom Shortcut"
         }
     }
 
     var detail: String {
         switch self {
         case .macOSNative, .claudeCode, .kimiCode:
-            "调用苹果原生语音转写，识别完成后以 ⌘V 写回当前光标位置。适合 Claude Code、Kimi Code、Codex 等 CLI 终端及任意输入框。按一次开始，再按一次结束。"
+            "Uses Apple's native voice transcription; once recognized, the text is pasted back at the cursor with ⌘V. Works with CLI terminals like Claude Code, Kimi Code, and Codex, and any text field. Press once to start, press again to stop."
         case .typeless:
-            "预设对应快捷键：Typeless/微信语音/豆包输入法内仍选 Fn/Globe。本 Studio 使用 F19 作为 Fn 触发键；按下后向系统注入「按住 Fn」。旧版 F18 仍会兼容监听。请授予输入监控与辅助功能。"
+            "Preset for the corresponding shortcut: inside Typeless / WeChat Voice / Doubao Input Method, still select Fn/Globe. AhaKey Studio uses F19 as the Fn trigger key; pressing it injects “Fn held down” into the system. The legacy F18 is still monitored for compatibility. Please grant Input Monitoring and Accessibility permissions."
         case .wechat:
-            "AhaKey Studio 使用 F19 作为 Fn 触发键，并在后台把语音键的按下/松开转换成 Fn/Globe，便于接入微信语音。"
+            "AhaKey Studio uses F19 as the Fn trigger key and converts voice key press/release into Fn/Globe in the background, making it easy to integrate with WeChat Voice."
         case .doubao:
-            "豆包输入法 Mac 版需要直接接收真实语音键事件。AhaKey Studio 会切到豆包输入源，并把 F18 配置为豆包长按语音快捷键；按住语音键说话，松开后由豆包提交文字。"
+            "Doubao Input Method for Mac needs to receive real voice key events directly. AhaKey Studio switches to the Doubao input source and configures F18 as Doubao's hold-to-talk voice shortcut; hold the voice key to speak, and Doubao submits the text when you release."
         case .codex:
-            "规划中，保留入口。"
+            "Planned; entry kept as a placeholder."
         case .custom:
-            "直接自己指定底层快捷键。"
+            "Specify the underlying shortcut directly yourself."
         }
     }
 
@@ -446,26 +446,26 @@ enum LightBarPreviewState: String, CaseIterable, Codable, Identifiable {
     var title: String {
         switch self {
         case .aiRunning:
-            "AI 运行中"
+            "AI Running"
         case .waitingApproval:
-            "等待批准"
+            "Waiting for Approval"
         case .stopped:
-            "已停止"
+            "Stopped"
         case .taskCompleted:
-            "任务完成"
+            "Task Completed"
         }
     }
 
     var detail: String {
         switch self {
         case .aiRunning:
-            "默认效果是来回流水灯。"
+            "Default effect is a back-and-forth running light."
         case .waitingApproval:
-            "提醒用户当前需要确认。"
+            "Reminds the user that confirmation is needed."
         case .stopped:
-            "默认用红色常亮停住。"
+            "Defaults to a solid red light when stopped."
         case .taskCompleted:
-            "表示本轮执行已经完成。"
+            "Indicates the current run has finished."
         }
     }
 
@@ -535,45 +535,45 @@ enum LightEffectStyle: String, CaseIterable, Codable, Identifiable {
 
     var title: String {
         switch self {
-        case .off: "熄灭"
-        case .middleLight: "中间停住"
-        case .singleMove: "来回流水"
-        case .breathing: "整条呼吸"
-        case .rainbowMove: "彩虹流水"
-        case .rainbowWave: "彩虹波浪"
-        case .rainbowWaveSlow: "彩虹慢波浪"
-        case .typingRipple: "打字涟漪"
-        case .comet: "彗星拖尾"
-        case .scanBar: "扫描条"
-        case .pulseCenter: "中心脉冲"
-        case .warningBlink: "警告闪烁"
-        case .successSweep: "成功扫过"
-        case .blueThinking: "蓝色思考"
-        case .lowBattery: "低电量"
-        case .chargingFlow: "充电流动"
-        case .approvalWait: "等待审批"
+        case .off: "Off"
+        case .middleLight: "Center Hold"
+        case .singleMove: "Back-and-Forth"
+        case .breathing: "Full Breathing"
+        case .rainbowMove: "Rainbow Chase"
+        case .rainbowWave: "Rainbow Wave"
+        case .rainbowWaveSlow: "Slow Rainbow Wave"
+        case .typingRipple: "Typing Ripple"
+        case .comet: "Comet Trail"
+        case .scanBar: "Scan Bar"
+        case .pulseCenter: "Center Pulse"
+        case .warningBlink: "Warning Blink"
+        case .successSweep: "Success Sweep"
+        case .blueThinking: "Blue Thinking"
+        case .lowBattery: "Low Battery"
+        case .chargingFlow: "Charging Flow"
+        case .approvalWait: "Waiting for Approval"
         }
     }
 
     var detail: String {
         switch self {
-        case .off: "不点亮灯条。"
-        case .middleLight: "中间最亮，两侧渐弱，适合停住提示。"
-        case .singleMove: "单点来回移动，适合运行中。"
-        case .breathing: "整条均匀起伏，适合等待确认。"
-        case .rainbowMove: "彩色单点流水，更活跃。"
-        case .rainbowWave: "整条彩色流动，更显眼。"
-        case .rainbowWaveSlow: "比普通彩虹波浪更慢，适合做氛围效果。"
-        case .typingRipple: "从中心向两侧扩散的涟漪效果。"
-        case .comet: "带拖尾的单向扫过，像彗星。"
-        case .scanBar: "3 灯一组左右扫描。"
-        case .pulseCenter: "中心快速脉冲扩散。"
-        case .warningBlink: "橙色快速闪烁，适合警告。"
-        case .successSweep: "绿色从左到右逐渐点亮。"
-        case .blueThinking: "蓝色呼吸波浪，适合思考中。"
-        case .lowBattery: "红色慢闪，表示低电量。"
-        case .chargingFlow: "绿色填充流动，表示充电中。"
-        case .approvalWait: "琥珀色呼吸 + 中心闪烁，等待用户操作。"
+        case .off: "Light bar stays off."
+        case .middleLight: "Brightest in the center, fading toward both sides; good for a hold indicator."
+        case .singleMove: "A single dot moves back and forth; good while running."
+        case .breathing: "The whole bar rises and falls evenly; good while waiting for confirmation."
+        case .rainbowMove: "A colorful single-dot chase; livelier."
+        case .rainbowWave: "The whole bar flows in color; more eye-catching."
+        case .rainbowWaveSlow: "Slower than the regular rainbow wave; good as an ambient effect."
+        case .typingRipple: "A ripple that spreads from the center to both sides."
+        case .comet: "A one-way sweep with a trail, like a comet."
+        case .scanBar: "Scans left and right in groups of 3 LEDs."
+        case .pulseCenter: "Fast pulses spreading from the center."
+        case .warningBlink: "Fast orange blinking; good for warnings."
+        case .successSweep: "Green gradually lights up from left to right."
+        case .blueThinking: "A blue breathing wave; good while thinking."
+        case .lowBattery: "Slow red blinking indicates low battery."
+        case .chargingFlow: "A green filling flow indicates charging."
+        case .approvalWait: "Amber breathing plus a center blink while waiting for user action."
         }
     }
 }
@@ -681,11 +681,11 @@ enum MacroAction: UInt8, Codable, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .noOp: return "空操作"
-        case .downKey: return "按下"
-        case .upKey: return "松开"
-        case .delay: return "延时"
-        case .upAllKeys: return "全部松开"
+        case .noOp: return "No-Op"
+        case .downKey: return "Press"
+        case .upKey: return "Release"
+        case .delay: return "Delay"
+        case .upAllKeys: return "Release All"
         }
     }
 
@@ -844,7 +844,7 @@ struct AhaKeyKeyDraft: Codable, Equatable, Identifiable {
             return voicePreset.title
         }
         if usesMacro {
-            return "宏：\(macro.displaySummary)"
+            return "Macro: \(macro.displaySummary)"
         }
         return shortcut.displayLabel
     }
@@ -886,13 +886,13 @@ struct AhaKeyOLEDDraft: Codable, Equatable {
         let statusLine: String
         switch mode {
         case .mode0:
-            statusLine = "Claude Code · 终端权限菜单 Y/N。"
+            statusLine = "Claude Code · Terminal permission menu Y/N."
         case .mode1:
-            statusLine = "Cursor · ↵ 接受改动 / ⌫ 拒绝改动。"
+            statusLine = "Cursor · ↵ accept changes / ⌫ reject changes."
         case .mode2:
-            statusLine = "Codex · 审批 ↵ / Esc。"
+            statusLine = "Codex · Approval ↵ / Esc."
         case .mode3:
-            statusLine = "自定义模式。"
+            statusLine = "Custom mode."
         }
         return AhaKeyOLEDDraft(
             localAssetPath: DefaultOLEDAssets.bundledAssetPath(for: mode),

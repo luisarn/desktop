@@ -62,7 +62,7 @@ final class AhaKeyBLEManager: NSObject, ObservableObject {
     /// `nil` 表示尚未收到状态；`false` 表示旧协议固件（状态帧的亮度保留位为 0）。
     /// 新固件把该字节定义为 1...100 的 WS2812 亮度，并实现 0x84/0x85/0x91。
     @Published private(set) var supportsConfigurableLighting: Bool?
-    @Published private(set) var bleConnectionStatus: String = "未连接"
+    @Published private(set) var bleConnectionStatus: String = "Not Connected"
     @Published private(set) var bleDeviceUUID: String = "—"
     @Published private(set) var bluetoothPermissionGranted = true
     @Published private(set) var bluetoothPoweredOn = false
@@ -184,9 +184,9 @@ final class AhaKeyBLEManager: NSObject, ObservableObject {
         bluetoothPermissionGranted = Self.currentBluetoothAuthorizationGranted()
         bluetoothPoweredOn = central?.state == .poweredOn
         if !bluetoothPermissionGranted {
-            bleConnectionStatus = "蓝牙权限未开启"
+            bleConnectionStatus = "Bluetooth Not Authorized"
         } else if central?.state == .poweredOff {
-            bleConnectionStatus = "蓝牙关闭"
+            bleConnectionStatus = "Bluetooth Off"
         }
     }
 
@@ -258,7 +258,7 @@ final class AhaKeyBLEManager: NSObject, ObservableObject {
                 self.peripheral = p
                 p.delegate = self
                 central?.connect(p, options: nil)
-                bleConnectionStatus = "连接中…"
+                bleConnectionStatus = "Connecting…"
                 linkDiagnostic = .connecting
                 return
             }
@@ -280,7 +280,7 @@ final class AhaKeyBLEManager: NSObject, ObservableObject {
             self.peripheral = existing
             existing.delegate = self
             central?.connect(existing, options: nil)
-            bleConnectionStatus = "连接中…"
+            bleConnectionStatus = "Connecting…"
             return
         }
 
@@ -312,7 +312,7 @@ final class AhaKeyBLEManager: NSObject, ObservableObject {
             return
         }
         isScanning = true
-        bleConnectionStatus = "扫描中…"
+        bleConnectionStatus = "Scanning…"
         linkDiagnostic = .scanning
         appendLog("开始扫描 AhaKey 设备…")
         central?.scanForPeripherals(
@@ -325,7 +325,7 @@ final class AhaKeyBLEManager: NSObject, ObservableObject {
             if self.isScanning {
                 self.central?.stopScan()
                 self.isScanning = false
-                self.bleConnectionStatus = "等待设备"
+                self.bleConnectionStatus = "Waiting for Device"
                 // 扫描超时后再用宽 service 探一次，区分「设备已连但未广播配置链路」与「彻底没发现设备」（Issue #34）。
                 if self.systemConnectedAhaKeyPeripheral() != nil {
                     self.linkDiagnostic = .systemConnectedNoConfigLink
@@ -686,7 +686,7 @@ final class AhaKeyBLEManager: NSObject, ObservableObject {
                 guard let self else { return }
                 guard self.central?.state == .poweredOn else { return }
                 guard !self.isConnected, !self.isScanning else { return }
-                guard self.bleConnectionStatus != "连接中…" else { return }
+                guard self.bleConnectionStatus != "Connecting…" else { return }
                 self.appendLog("后台轮询中，尝试寻找设备…")
                 self.connectAutomatically()
             }
@@ -945,15 +945,15 @@ final class SwitchStateNotifier: ObservableObject {
 
         if switchedToAuto {
             postNotification(
-                title: "拨杆 → 自动批准",
-                body: "Kimi：若已安装 AhaKey Kimi Hooks，自动档会直接接管当前会话批准；若刚装完或刚升级 kimi-cli，请先重开一次 kimi。Claude/Cursor/Codex 仍走各自钩子。",
+                title: "Switch → Auto Approve",
+                body: "Kimi: If AhaKey Kimi Hooks are installed, Auto mode takes over approvals for the current session directly. If you just installed or upgraded kimi-cli, restart Kimi once first. Claude/Cursor/Codex still follow their own hooks.",
                 identifier: "lab.jawa.ahakey.switch.auto",
                 isCritical: true
             )
         } else if switchedToManual {
             postNotification(
-                title: "拨杆 → 手动批准",
-                body: "Claude / Cursor / Codex：按各自确认链。Kimi：若已安装 AhaKey Kimi Hooks，手动档会直接把当前会话拉回手动批准。",
+                title: "Switch → Manual Approve",
+                body: "Claude / Cursor / Codex: follow their own confirmation flows. Kimi: if AhaKey Kimi Hooks are installed, Manual mode pulls the current session back to manual approval.",
                 identifier: "lab.jawa.ahakey.switch.manual",
                 isCritical: false
             )
@@ -1000,7 +1000,7 @@ final class SwitchStateNotifier: ObservableObject {
         alert.messageText = title
         alert.informativeText = body
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "知道了")
+        alert.addButton(withTitle: "OK")
         alert.runModal()
     }
 }
@@ -1021,29 +1021,29 @@ enum LinkDiagnostic: Equatable {
     /// 顶栏 pill 用的极简副标题。
     var shortMessage: String {
         switch self {
-        case .idle, .scanning: return "扫描中…"
-        case .connecting: return "连接中…"
-        case .connected: return "已连接"
-        case .bluetoothOff: return "蓝牙未开启"
-        case .bluetoothUnauthorized: return "无蓝牙权限"
-        case .ownedByAgent: return "Agent 占用中"
-        case .systemConnectedNoConfigLink: return "配置链路未连"
-        case .noDeviceFound: return "未发现设备"
+        case .idle, .scanning: return "Scanning…"
+        case .connecting: return "Connecting…"
+        case .connected: return "Connected"
+        case .bluetoothOff: return "Bluetooth Off"
+        case .bluetoothUnauthorized: return "No Bluetooth Permission"
+        case .ownedByAgent: return "Owned by Agent"
+        case .systemConnectedNoConfigLink: return "Config Link Not Connected"
+        case .noDeviceFound: return "No Device Found"
         }
     }
 
     /// 详细可操作说明，供设备信息 / tooltip 展示。
     var detail: String {
         switch self {
-        case .idle: return "正在初始化蓝牙…"
-        case .scanning: return "正在扫描 AhaKey 设备…"
-        case .connecting: return "正在连接设备…"
-        case .connected: return "AhaKey 配置链路 (0x7340) 已连接。"
-        case .bluetoothOff: return "系统蓝牙未开启。请在「控制中心 / 系统设置 > 蓝牙」打开蓝牙。"
-        case .bluetoothUnauthorized: return "未授权蓝牙权限。请在「系统设置 > 隐私与安全性 > 蓝牙」中允许 AhaKey Studio。"
-        case .ownedByAgent: return "蓝牙当前交由 ahakeyconfig-agent 占用，本 App 不直接连接（这是预期行为）。配置链路状态请参考 Agent；如需本 App 直连，请在设备信息里把「蓝牙连接」切回本 App。"
-        case .systemConnectedNoConfigLink: return "设备已通过系统蓝牙（HID / 语音链路）连接，但 AhaKey 配置服务 0x7340 尚未建立。本 App 正在尝试主动接管该链路；若长时间无效，请在「系统设置 > 蓝牙」忽略此设备后重新配对。"
-        case .noDeviceFound: return "未发现 AhaKey 设备。请确认设备已开机、处于蓝牙范围内并已与本机配对。"
+        case .idle: return "Initializing Bluetooth…"
+        case .scanning: return "Scanning for AhaKey devices…"
+        case .connecting: return "Connecting to device…"
+        case .connected: return "AhaKey config link (0x7340) connected."
+        case .bluetoothOff: return "Bluetooth is off. Turn it on in Control Center or System Settings > Bluetooth."
+        case .bluetoothUnauthorized: return "Bluetooth permission not granted. Allow AhaKey Studio in System Settings > Privacy & Security > Bluetooth."
+        case .ownedByAgent: return "Bluetooth is currently owned by ahakeyconfig-agent; this app does not connect directly (this is expected). See the Agent for config link status. To connect directly from this app, switch \"Bluetooth Connection\" back to this app in Device Info."
+        case .systemConnectedNoConfigLink: return "The device is connected via system Bluetooth (HID / voice link), but the AhaKey config service 0x7340 has not been established. This app is trying to take over the link. If it does not recover, forget the device in System Settings > Bluetooth and pair again."
+        case .noDeviceFound: return "No AhaKey device found. Make sure the device is powered on, within Bluetooth range, and paired with this Mac."
         }
     }
 
@@ -1066,25 +1066,25 @@ enum OLEDUploadError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .channelNotReady:
-            return "BLE 数据通道还没准备好。"
+            return "The BLE data channel is not ready yet."
         case .noFrames:
-            return "没有可上传的图片帧。"
+            return "There are no image frames to upload."
         case .tooManyFrames(let max):
-            return "帧数超过设备上限，最多支持 \(max) 帧。"
+            return "Frame count exceeds the device limit; at most \(max) frames are supported."
         case .noAvailablePictureSlot(let needed, let max):
-            return "动画需要 \(needed) 帧，但设备当前没有足够连续空间。总容量上限约为 \(max) 帧。"
+            return "The animation needs \(needed) frames, but the device has no contiguous space available. Total capacity is about \(max) frames."
         case .timeout(let command):
-            return String(format: "等待设备响应超时: 0x%02X", command)
+            return String(format: "Timed out waiting for device response: 0x%02X", command)
         case .deviceRejected(let command, let status):
-            return String(format: "设备拒绝了命令 0x%02X，状态码 0x%02X", command, status)
+            return String(format: "The device rejected command 0x%02X with status 0x%02X", command, status)
         case .invalidPictureStatePayload:
-            return "设备返回的动画槽位信息无法解析。"
+            return "The animation slot information returned by the device could not be parsed."
         case .invalidDeviceStatusPayload:
-            return "设备返回的状态信息无法解析。"
+            return "The status information returned by the device could not be parsed."
         case .invalidCommandFrame:
-            return "待写入的命令帧格式不正确。"
+            return "The command frame to be written has an invalid format."
         case .unsupportedLightingFirmware(let main, let sub, let reportedBrightness):
-            return "当前键盘是旧灯效协议固件（设备回报 v\(main).\(sub)，亮度字段 \(reportedBrightness)），不会执行 0x84/0x85/0x91。请先刷入 2026-06-22 后的新固件，本次未上报写入成功。"
+            return "This keyboard runs the old lighting protocol firmware (device reports v\(main).\(sub), brightness field \(reportedBrightness)); 0x84/0x85/0x91 will not be executed. Please flash firmware released after 2026-06-22 first. The write was not reported as successful this time."
         }
     }
 }
@@ -1102,12 +1102,12 @@ extension AhaKeyBLEManager: CBCentralManagerDelegate {
             case .poweredOff:
                 self.refreshBluetoothAuthorization()
                 self.appendLog("蓝牙已关闭", isError: true)
-                self.bleConnectionStatus = "蓝牙关闭"
+                self.bleConnectionStatus = "Bluetooth Off"
                 self.linkDiagnostic = .bluetoothOff
             case .unauthorized:
                 self.refreshBluetoothAuthorization()
                 self.appendLog("蓝牙权限未开启", isError: true)
-                self.bleConnectionStatus = "蓝牙权限未开启"
+                self.bleConnectionStatus = "Bluetooth Not Authorized"
                 self.linkDiagnostic = .bluetoothUnauthorized
             default:
                 self.refreshBluetoothAuthorization()
@@ -1132,7 +1132,7 @@ extension AhaKeyBLEManager: CBCentralManagerDelegate {
             self.peripheral = peripheral
             peripheral.delegate = self
             self.central?.connect(peripheral, options: nil)
-            self.bleConnectionStatus = "连接中…"
+            self.bleConnectionStatus = "Connecting…"
         }
     }
 
@@ -1142,7 +1142,7 @@ extension AhaKeyBLEManager: CBCentralManagerDelegate {
             self.deviceName = peripheral.name
             self.bleDeviceUUID = peripheral.identifier.uuidString
             self.lastPeripheralUUID = peripheral.identifier
-            self.bleConnectionStatus = "已连接"
+            self.bleConnectionStatus = "Connected"
             self.linkDiagnostic = .connected
             self.appendLog("已连接: \(peripheral.name ?? "?") UUID=\(peripheral.identifier.uuidString)")
             self.autoReconnectTimer?.invalidate()
@@ -1160,7 +1160,7 @@ extension AhaKeyBLEManager: CBCentralManagerDelegate {
 
     nonisolated func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
         Task { @MainActor in
-            self.bleConnectionStatus = "连接失败"
+            self.bleConnectionStatus = "Connection Failed"
             self.appendLog("连接失败: \(error?.localizedDescription ?? "未知")", isError: true)
             self.startAutoReconnectPolling()
             // 3 秒后重试
@@ -1184,7 +1184,7 @@ extension AhaKeyBLEManager: CBCentralManagerDelegate {
                 )
             }
             self.isConnected = false
-            self.bleConnectionStatus = "已断开"
+            self.bleConnectionStatus = "Disconnected"
             self.dataChar = nil
             self.commandChar = nil
             self.notifyChar = nil

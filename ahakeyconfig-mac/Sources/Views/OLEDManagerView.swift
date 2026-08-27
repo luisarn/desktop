@@ -11,7 +11,7 @@ struct OLEDManagerView: View {
 
     var body: some View {
         Form {
-            Section("动画管理") {
+            Section("Animation Manager") {
                 // 预览区
                 ZStack {
                     RoundedRectangle(cornerRadius: 8)
@@ -28,26 +28,26 @@ struct OLEDManagerView: View {
                             Image(systemName: "photo")
                                 .font(.largeTitle)
                                 .foregroundStyle(.tertiary)
-                            Text("无图片")
+                            Text("No Image")
                                 .foregroundStyle(.tertiary)
                         }
                     }
                 }
 
                 HStack(spacing: 12) {
-                    Button("添加图片") {
+                    Button("Add Image") {
                         selectImage()
                     }
                     .buttonStyle(.bordered)
 
-                    Button("添加 GIF") {
+                    Button("Add GIF") {
                         selectGIF()
                     }
                     .buttonStyle(.bordered)
 
                     Spacer()
 
-                    Button("清空") {
+                    Button("Clear") {
                         selectedImage = nil
                         selectedGIFURL = nil
                         frameCount = 0
@@ -62,7 +62,7 @@ struct OLEDManagerView: View {
                         Stepper("\(fps)", value: $fps, in: 1...30)
                             .frame(width: 100)
                         Spacer()
-                        Text("\(frameCount) 帧")
+                        Text("\(frameCount) frames")
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -70,7 +70,7 @@ struct OLEDManagerView: View {
 
             if bleManager.isConnected {
                 Section {
-                    Button("上传到设备") {
+                    Button("Upload to Device") {
                         // TODO: 通过 BLE 0x7343 分包上传图片/GIF 数据
                         // OLED 分辨率和图片格式待逆向确认
                     }
@@ -79,7 +79,7 @@ struct OLEDManagerView: View {
                 }
             } else {
                 Section {
-                    Text("请先连接 AhaKey 设备")
+                    Text("Please connect an AhaKey device first")
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .center)
                 }

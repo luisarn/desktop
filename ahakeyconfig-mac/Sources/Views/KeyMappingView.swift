@@ -6,7 +6,7 @@ struct KeyConfig: Codable {
     var description: String = ""
 
     var displayName: String {
-        hidCode == 0 ? "未设置" : HIDUsage.name(for: hidCode)
+        hidCode == 0 ? "Not Set" : HIDUsage.name(for: hidCode)
     }
 }
 
@@ -33,9 +33,9 @@ struct KeyMappingView: View {
 
     @State private var selectedKey = 0
     @State private var keys: [KeyConfig] = KeyConfigStore.load() ?? [
-        KeyConfig(hidCode: HIDUsage.capsLock, description: "录音"),
+        KeyConfig(hidCode: HIDUsage.capsLock, description: "Record"),
         KeyConfig(hidCode: HIDUsage.enter, description: "Enter"),
-        KeyConfig(hidCode: HIDUsage.escape, description: "取消"),
+        KeyConfig(hidCode: HIDUsage.escape, description: "Cancel"),
         KeyConfig(hidCode: HIDUsage.backspace, description: "Backspace"),
     ]
     @State private var showWriteSuccess = false
@@ -45,7 +45,7 @@ struct KeyMappingView: View {
     var body: some View {
         Form {
             // MARK: - 按键选择
-            Section("按键映射") {
+            Section("Key Mapping") {
                 HStack(spacing: 12) {
                     ForEach(0..<4) { index in
                         Button {
@@ -81,17 +81,17 @@ struct KeyMappingView: View {
             }
 
             // MARK: - 编辑选中键
-            Section("Key \(selectedKey + 1) 设置") {
-                Picker("键码", selection: $keys[selectedKey].hidCode) {
-                    Text("未设置").tag(UInt8(0))
+            Section("Key \(selectedKey + 1) Settings") {
+                Picker("Key Code", selection: $keys[selectedKey].hidCode) {
+                    Text("Not Set").tag(UInt8(0))
                     ForEach(HIDUsage.allOptions, id: \.code) { option in
                         Text("\(option.name)  (\(String(format: "0x%02X", option.code)))")
                             .tag(option.code)
                     }
                 }
 
-                CompatLabeledContent("描述") {
-                    TextField("显示在键盘 LCD 上", text: $keys[selectedKey].description)
+                CompatLabeledContent("Description") {
+                    TextField("Shown on the keyboard LCD", text: $keys[selectedKey].description)
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 200)
                 }
@@ -100,22 +100,22 @@ struct KeyMappingView: View {
             // MARK: - 预设方案
             Section {
                 HStack {
-                    Button("EchoWrite 推荐") {
+                    Button("EchoWrite Recommended") {
                         applyEchoWritePreset()
                     }
                     .buttonStyle(.bordered)
                     .help("Key1=F18(EchoWrite) Key2=Enter Key3=Escape Key4=Enter")
 
-                    Button("恢复默认") {
+                    Button("Restore Defaults") {
                         applyDefaultPreset()
                     }
                     .buttonStyle(.bordered)
-                    .help("恢复出厂默认键位")
+                    .help("Restore factory default key mapping")
                 }
             } header: {
-                Text("预设方案")
+                Text("Presets")
             } footer: {
-                Text("EchoWrite 推荐：Key1 发送 F18 触发随声写录音，Key2/4 确认，Key3 取消。")
+                Text("EchoWrite Recommended: Key1 sends F18 to trigger EchoWrite recording, Key2/4 confirm, Key3 cancels.")
                     .font(.caption)
             }
 
@@ -123,13 +123,13 @@ struct KeyMappingView: View {
             if bleManager.isConnected {
                 Section {
                     HStack {
-                        Button("应用全部键位到设备") {
+                        Button("Apply All Keys to Device") {
                             writeAllKeys()
                         }
                         .buttonStyle(.borderedProminent)
 
                         if showWriteSuccess {
-                            Label("已发送", systemImage: "checkmark.circle.fill")
+                            Label("Sent", systemImage: "checkmark.circle.fill")
                                 .foregroundStyle(.green)
                                 .font(.caption)
                         }
@@ -140,7 +140,7 @@ struct KeyMappingView: View {
                     HStack {
                         Image(systemName: "exclamationmark.triangle")
                             .foregroundStyle(.orange)
-                        Text("请先连接 AhaKey 设备")
+                        Text("Please connect an AhaKey device first")
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .center)

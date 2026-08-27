@@ -23,8 +23,8 @@ enum BluetoothConnectionOwner: String, CaseIterable, Identifiable {
 
     var shortDetail: String {
         switch self {
-        case .ahaKeyStudio: return "本 App 连接蓝牙，用于配置与同步。Agent 的 LaunchJob 在持有方为 App 时不会加载，避免抢连接。"
-        case .agentDaemon: return "仅 Agent 连接蓝牙。Claude/Cursor/Codex/Kimi Code CLI Hook 才能驱动灯条与拨杆查询；本 App 里无法对键盘发 BLE 命令。"
+        case .ahaKeyStudio: return "This app connects to the keyboard over Bluetooth for configuration and sync. The Agent's LaunchJob is not loaded while the app is the owner, to avoid connection conflicts."
+        case .agentDaemon: return "Only the Agent connects over Bluetooth. Claude/Cursor/Codex/Kimi Code CLI hooks can then drive the light bar and dial queries; this app cannot send BLE commands to the keyboard in this mode."
         }
     }
 }
@@ -301,7 +301,7 @@ final class AgentManager: ObservableObject {
                 log.info("未安装 LaunchAgent，无法将蓝牙交给 Agent，临时允许 App 连接")
                 bleManager.setSuppressedForAgentOwningKeyboard(false)
                 if !isLaunch {
-                    agentUserAlert = "尚未安装 Agent，无法切回「键盘控制中」。请在「更多 → 设备信息 · Agent」里先安装并启用 Agent。"
+                    agentUserAlert = "The Agent is not installed, so you can't switch back to \"Keyboard Control\". Install and enable the Agent first in \"More → Device Info · Agent\"."
                 }
                 Task { @MainActor in
                     try? await Task.sleep(nanoseconds: UInt64(500) * 1_000_000)
@@ -330,7 +330,7 @@ final class AgentManager: ObservableObject {
                     log.info("Agent 已安装但未能启动（socket 未出现），临时回退由 App 直连键盘")
                     bleManager.setSuppressedForAgentOwningKeyboard(false)
                     if !isLaunch {
-                        self.agentUserAlert = "Agent 已安装但未能启动，已临时由 App 直接连接键盘。请在「更多 → 设备信息 · Agent」里检查或重新安装 Agent。"
+                        self.agentUserAlert = "The Agent is installed but failed to start, so the app is temporarily connecting to the keyboard directly. Check or reinstall the Agent in \"More → Device Info · Agent\"."
                     }
                     if !bleManager.isConnected, !bleManager.isScanning {
                         bleManager.connectAutomatically()
@@ -486,7 +486,7 @@ final class AgentManager: ObservableObject {
             return true
         } catch {
             log.error("LaunchAgent 安装失败: \(error)")
-            agentUserAlert = "无法写入 LaunchAgent 配置文件：\(error.localizedDescription)\n\n将写入：\(plistPath)\n已尝试创建目录：\(launchAgentsDirectoryURL.path)\n若仍失败，请检查对「~/Library」是否有写权限，或本机管理策略是否禁止用户 LaunchAgents。"
+            agentUserAlert = "Could not write the LaunchAgent configuration file: \(error.localizedDescription)\n\nTarget: \(plistPath)\nAttempted to create directory: \(launchAgentsDirectoryURL.path)\nIf it still fails, check write permission for \"~/Library\", or whether a device management policy prohibits user LaunchAgents."
             return false
         }
     }
@@ -508,7 +508,7 @@ final class AgentManager: ObservableObject {
         defer { isAgentOperationInProgress = false }
 
         guard isAgentBinaryPresentInBundle else {
-            agentUserAlert = "应用包内没有可执行的 ahakeyconfig-agent（路径：…/Contents/MacOS/ahakeyconfig-agent）。请确认发版脚本已把该二进制一并打进 .app；仅有主程序时无法安装守护进程。"
+            agentUserAlert = "No executable ahakeyconfig-agent found in the app bundle (path: …/Contents/MacOS/ahakeyconfig-agent). Make sure the release script includes this binary in the .app; the daemon cannot be installed with the main app alone."
             return
         }
 
@@ -523,8 +523,8 @@ final class AgentManager: ObservableObject {
             if !load.ok && !isBenignLaunchctlLoadMessage(load.mergedOutput) {
                 loadFailed = true
                 log.error("launchctl load failed: \(load.mergedOutput)")
-                let out = load.mergedOutput.isEmpty ? "（无输出，退出非 0）" : load.mergedOutput
-                agentUserAlert = "LaunchAgent 的 plist 已保存，但 launchctl load 失败，守护进程未载入。\n\nlaunchctl 输出：\n\(out)\n\n常见原因：同一 Label 已存在、plist 无效、对 ~/Library/LaunchAgents 无写权限。可先点「卸载」再装，或在「控制台」搜索 \(label)。"
+                let out = load.mergedOutput.isEmpty ? "(no output, non-zero exit)" : load.mergedOutput
+                agentUserAlert = "The LaunchAgent plist was saved, but launchctl load failed; the daemon was not loaded.\n\nlaunchctl output:\n\(out)\n\nCommon causes: the same label already exists, the plist is invalid, or ~/Library/LaunchAgents is not writable. Try clicking \"Uninstall\" and installing again, or search for \(label) in Console."
             }
         }
 
@@ -538,7 +538,7 @@ final class AgentManager: ObservableObject {
 
         var lines: [String] = []
         if bluetoothConnectionOwner == .agentDaemon, !loadFailed {
-            lines.append("launchctl load 已执行。若数秒后未显示「运行中」，请点「查看日志」。")
+            lines.append("launchctl load was executed. If \"Running\" doesn't appear after a few seconds, click \"View Log\".")
         }
         if !claudeLine.isEmpty { lines.append(claudeLine) }
         if !cursorLine.isEmpty { lines.append(cursorLine) }
@@ -548,7 +548,7 @@ final class AgentManager: ObservableObject {
         if let err = agentUserAlert {
             agentUserAlert = err + (tail.isEmpty ? "" : "\n\n——\n\n" + tail)
         } else {
-            agentUserAlert = tail.isEmpty ? "安装完成。" : tail
+            agentUserAlert = tail.isEmpty ? "Installation complete." : tail
         }
     }
 
@@ -582,7 +582,7 @@ final class AgentManager: ObservableObject {
     /// 启动 Agent 守护进程（先确保 Job 已 load，再 start；适合「已安装但未运行」）。
     func start() {
         guard isInstalled else {
-            agentUserAlert = "尚未安装 LaunchAgent。请先点「安装并启用」。"
+            agentUserAlert = "The LaunchAgent is not installed. Click \"Install & Enable\" first."
             return
         }
         if launchAgentNeedsRewrite() {
@@ -597,17 +597,17 @@ final class AgentManager: ObservableObject {
             self.isAgentOperationInProgress = false
             self.refresh()
             if !self.isRunning {
-                var m = "已执行 launchctl load / start，但尚未检测到 Agent 在运行（未出现 /tmp/ahakey.sock）。\n\n"
+                var m = "launchctl load / start was executed, but the Agent does not appear to be running (/tmp/ahakey.sock did not appear).\n\n"
                 if !loadRes.ok && !isBenignLaunchctlLoadMessage(loadRes.mergedOutput) {
-                    m += "load：\n\(loadRes.mergedOutput.isEmpty ? "（无输出）" : loadRes.mergedOutput)\n\n"
+                    m += "load:\n\(loadRes.mergedOutput.isEmpty ? "(no output)" : loadRes.mergedOutput)\n\n"
                 }
                 if !startRes.ok {
-                    m += "start：\n\(startRes.mergedOutput.isEmpty ? "（无输出）" : startRes.mergedOutput)\n\n"
+                    m += "start:\n\(startRes.mergedOutput.isEmpty ? "(no output)" : startRes.mergedOutput)\n\n"
                 }
-                m += "请点「查看日志」检查 \(self.logFilePath)；并确认系统「隐私与安全性」中已允许本应用使用蓝牙；若通过 LaunchAgent 拉起 agent 子进程，也需为同一签名的二进制授权。"
+                m += "Click \"View Log\" to inspect \(self.logFilePath); also make sure this app is allowed to use Bluetooth in System Settings → Privacy & Security. If the agent subprocess is launched via a LaunchAgent, the binary with the same signature must also be granted permission."
                 self.agentUserAlert = m
             } else if (!loadRes.ok && !isBenignLaunchctlLoadMessage(loadRes.mergedOutput)) || !startRes.ok {
-                self.agentUserAlert = "Agent 已运行。附注：launchctl 输出 — load：\(loadRes.mergedOutput) start：\(startRes.mergedOutput)"
+                self.agentUserAlert = "The Agent is running. Note: launchctl output — load: \(loadRes.mergedOutput) start: \(startRes.mergedOutput)"
             }
         }
     }
@@ -644,7 +644,7 @@ final class AgentManager: ObservableObject {
     }
 
     func readLog() -> String {
-        (try? String(contentsOfFile: logFilePath, encoding: .utf8)) ?? "(无日志)"
+        (try? String(contentsOfFile: logFilePath, encoding: .utf8)) ?? "(No log)"
     }
 
     // MARK: - Cursor 用户级文件（可展示、可合并，非 Hook 子进程管理）
@@ -665,36 +665,36 @@ final class AgentManager: ObservableObject {
     func readUserCursorHooksJsonForDisplay() -> String {
         let path = cursorHooksPath
         guard FileManager.default.fileExists(atPath: path) else {
-            return "（文件不存在：\(path)）\n\n可先点「安装 Cursor Hooks」生成或合并；若只使用**项目内** `.cursor/hooks.json`，本路径仍可能为空。"
+            return "(File does not exist: \(path))\n\nClick \"Install Cursor Hooks\" to create or merge it; if you only use a **project-level** `.cursor/hooks.json`, this path may remain empty."
         }
-        return Self.prettyJsonString(atPath: path) ?? "（存在但无法解析为 JSON：\(path)）"
+        return Self.prettyJsonString(atPath: path) ?? "(Exists but could not be parsed as JSON: \(path))"
     }
 
     /// 将 `~/.cursor/cli-config.json` 以可读（pretty）形式读出；不存在时提示。
     func readUserCursorCliConfigForDisplay() -> String {
         let path = cursorCliConfigPath
         guard FileManager.default.fileExists(atPath: path) else {
-            return "（文件不存在：\(path)）\n\n可点诊断面板中「合并 Shell 白名单 + approvalMode=auto」从空白创建；或自行在文档中按 `permissions` 配置。"
+            return "(File does not exist: \(path))\n\nClick \"Merge Shell Allowlist + approvalMode=auto\" in the diagnostics panel to create it from scratch, or configure `permissions` yourself per the documentation."
         }
-        return Self.prettyJsonString(atPath: path) ?? "（存在但无法解析为 JSON：\(path)）"
+        return Self.prettyJsonString(atPath: path) ?? "(Exists but could not be parsed as JSON: \(path))"
     }
 
     /// 将 `~/.codex/config.toml` 原样读出；Codex hooks 是 TOML，不是 JSON。
     func readUserCodexConfigForDisplay() -> String {
         let path = codexConfigPath
         guard FileManager.default.fileExists(atPath: path) else {
-            return "（文件不存在：\(path)）\n\n可先点「安装 Codex Hooks」创建并合并 `[features].hooks` 与 AhaKey hook block。"
+            return "(File does not exist: \(path))\n\nClick \"Install Codex Hooks\" to create it and merge `[features].hooks` with the AhaKey hook block."
         }
-        return (try? String(contentsOfFile: path, encoding: .utf8)) ?? "（存在但无法读取：\(path)）"
+        return (try? String(contentsOfFile: path, encoding: .utf8)) ?? "(Exists but could not be read: \(path))"
     }
 
     /// `~/.kimi/config.toml` 原样读出（Kimi Hooks 配置为文本 TOML）。
     func readUserKimiConfigForDisplay() -> String {
         let path = kimiConfigPath
         guard FileManager.default.fileExists(atPath: path) else {
-            return "（文件不存在：\(path)）\n\n可先点「安装 Kimi Hooks」创建并写入 AhaKey 标记块；须已安装并使用 Kimi Code CLI：https://moonshotai.github.io/kimi-cli/"
+            return "(File does not exist: \(path))\n\nClick \"Install Kimi Hooks\" to create it and write the AhaKey marker block; Kimi Code CLI must be installed and in use: https://moonshotai.github.io/kimi-cli/"
         }
-        return (try? String(contentsOfFile: path, encoding: .utf8)) ?? "（存在但无法读取：\(path)）"
+        return (try? String(contentsOfFile: path, encoding: .utf8)) ?? "(Exists but could not be read: \(path))"
     }
 
     /// 备份当前 `cli-config` 后，合并 `permissions.allow`（不删你已有项），并设置 `approvalMode` 为 `auto`。
@@ -706,7 +706,7 @@ final class AgentManager: ObservableObject {
         do {
             try FileManager.default.createDirectory(atPath: cursorDir, withIntermediateDirectories: true)
         } catch {
-            return "无法创建目录 \(cursorDir)：\(error.localizedDescription)"
+            return "Could not create directory \(cursorDir): \(error.localizedDescription)"
         }
         if FileManager.default.fileExists(atPath: path) {
             let bak = path + ".ahakey.bak"
@@ -716,7 +716,7 @@ final class AgentManager: ObservableObject {
                 }
                 try FileManager.default.copyItem(atPath: path, toPath: bak)
             } catch {
-                return "已存在 \(path) 但无法复制备份到 \(bak)：\(error.localizedDescription)"
+                return "\(path) already exists but could not be backed up to \(bak): \(error.localizedDescription)"
             }
         }
         var root = loadCursorCliConfig() ?? [:]
@@ -740,10 +740,10 @@ final class AgentManager: ObservableObject {
         root["approvalMode"] = "auto"
 
         guard saveCursorCliConfig(root) else {
-            return "合并后的 JSON 无法写回：\(path)"
+            return "Could not write the merged JSON back to: \(path)"
         }
         log.info("cli-config: merged Shell allow + approvalMode=auto at \(path)")
-        return "已写回：\(path)\n（此前若存在同路径文件，已备份为 \(path).ahakey.bak）\n\n本次在 permissions.allow 中新增合并 \(merged) 条常见 Shell(...) 规则（已有规则保留）；approvalMode 已设为 auto。\n\n若某版本仍弹窗，请把仍被拦的命令首词对照文档自行追加白名单：\nhttps://cursor.com/docs/cli/reference/permissions\n或检查工作区 .cursor/cli.json 是否另有限制。"
+        return "Written back to: \(path)\n(If a file already existed at this path, it was backed up as \(path).ahakey.bak)\n\nMerged \(merged) common Shell(...) rules into permissions.allow (existing rules kept); approvalMode is now set to auto.\n\nIf a version still prompts, add the first word of the blocked command to the allowlist yourself per the docs:\nhttps://cursor.com/docs/cli/reference/permissions\nOr check whether the workspace .cursor/cli.json has additional restrictions."
     }
 
     /// 合并 `~/.cursor/permissions.json` 的 `terminalAllowlist`（**IDE「Not in allowlist」** 与 cli-config 无关）。
@@ -753,7 +753,7 @@ final class AgentManager: ObservableObject {
         do {
             try FileManager.default.createDirectory(atPath: cursorDir, withIntermediateDirectories: true)
         } catch {
-            return "无法创建目录 \(cursorDir)：\(error.localizedDescription)"
+            return "Could not create directory \(cursorDir): \(error.localizedDescription)"
         }
         if FileManager.default.fileExists(atPath: path) {
             let bak = path + ".ahakey.bak"
@@ -761,7 +761,7 @@ final class AgentManager: ObservableObject {
                 if FileManager.default.fileExists(atPath: bak) { try FileManager.default.removeItem(atPath: bak) }
                 try FileManager.default.copyItem(atPath: path, toPath: bak)
             } catch {
-                return "已存在 permissions.json 但无法备份到 \(bak)：\(error.localizedDescription)"
+                return "permissions.json exists but could not be backed up to \(bak): \(error.localizedDescription)"
             }
         }
         var root = loadCursorPermissionsJson() ?? [:]
@@ -777,10 +777,10 @@ final class AgentManager: ObservableObject {
         }
         root["terminalAllowlist"] = list
         guard saveCursorPermissionsJson(root) else {
-            return "无法写回：\(path)"
+            return "Could not write back to: \(path)"
         }
         log.info("permissions.json: merged terminalAllowlist at \(path)")
-        return "已写回：\(path)（备份为 \(path).ahakey.bak）\n\n本次在 terminalAllowlist 中新增合并 \(n) 条前缀；用于 Agent 内「Not in allowlist」层，与 cli-config 的 Shell(...) 是两套。文档：\nhttps://cursor.com/docs/reference/permissions"
+        return "Written back to: \(path) (backed up as \(path).ahakey.bak)\n\nMerged \(n) prefixes into terminalAllowlist; this covers the Agent's \"Not in allowlist\" layer, which is separate from cli-config's Shell(...). Docs:\nhttps://cursor.com/docs/reference/permissions"
     }
 
     private func loadCursorPermissionsJson() -> [String: Any]? {
@@ -835,13 +835,13 @@ final class AgentManager: ObservableObject {
     /// 只读；由 `ahakeyconfig-agent` 在 `PermissionRequest` 与 Cursor 批准类 hook 中写入。
     func readPermissionRequestLog() -> String {
         (try? String(contentsOfFile: permissionRequestLogPath, encoding: .utf8))
-            ?? "尚无记录。在 Claude 中触发 PermissionRequest，在 Cursor 中让 Agent 调工具/Shell/MCP，或在 Kimi Code CLI 中触发工具调用后，会在此追加带 `ide` / `hookEvent` 的 JSON 行。若始终为空，请确认已安装 Agent、Hooks、蓝牙由 Agent 占用，且 `~/Library/.../AhaKeyConfig/diagnostics/` 可写。"
+            ?? "No records yet. Trigger a PermissionRequest in Claude, have the Agent call a tool/Shell/MCP in Cursor, or trigger a tool call in Kimi Code CLI, and a JSON line with `ide` / `hookEvent` will be appended here. If it stays empty, make sure the Agent and Hooks are installed, Bluetooth is owned by the Agent, and `~/Library/.../AhaKeyConfig/diagnostics/` is writable."
     }
 
     /// 只读；由 `ahakeyconfig-agent hook Codex*` 子进程写入，用于判断 Codex 客户端/终端是否真的触发了 hook。
     func readCodexHookLog() -> String {
         (try? String(contentsOfFile: codexHookLogPath, encoding: .utf8))
-            ?? "尚无记录。触发 Codex 后应在此追加 JSON 行。若终端 Codex 有记录、Codex 客户端没有记录，说明客户端未加载当前 `~/.codex/config.toml` hook，通常需要重启 Codex 客户端/新开终端后再测。"
+            ?? "No records yet. A JSON line should be appended here after Codex is triggered. If terminal Codex has records but the Codex client does not, the client has not loaded the current `~/.codex/config.toml` hooks — usually you need to restart the Codex client or open a new terminal and test again."
     }
 
     // MARK: - Claude hooks 追加
@@ -869,7 +869,7 @@ final class AgentManager: ObservableObject {
     /// 空串表示已写入；非空为「跳过 / 失败」说明，需展示给用户。
     private func installClaudeHooks() -> String {
         guard var settings = loadClaudeSettings() else {
-            return "Claude Hooks：未找到 ~/.claude/settings.json，已跳过。使用 Claude Code 并生成该文件后，可再点「安装 Claude Hooks」。"
+            return "Claude Hooks: ~/.claude/settings.json not found, skipped. After using Claude Code and generating that file, click \"Install Claude Hooks\" again."
         }
         var hooks = settings["hooks"] as? [String: Any] ?? [:]
 
@@ -909,7 +909,7 @@ final class AgentManager: ObservableObject {
             log.info("Claude hooks 已写入 ahakeyconfig-agent hook 子命令")
             return ""
         }
-        return "Claude Hooks：无法写入 \(claudeSettingsPath)。请检查该文件或父目录的权限/只读状态。"
+        return "Claude Hooks: could not write to \(claudeSettingsPath). Check the permissions/read-only state of the file or its parent directory."
     }
 
     private func removeClaudeHooks() {
@@ -1002,7 +1002,7 @@ final class AgentManager: ObservableObject {
         isAgentOperationInProgress = true
         defer { isAgentOperationInProgress = false }
         let s = installClaudeHooks()
-        agentUserAlert = s.isEmpty ? "Claude Hooks 已写入 ~/.claude/settings.json。" : s
+        agentUserAlert = s.isEmpty ? "Claude Hooks written to ~/.claude/settings.json." : s
         refresh()
     }
 
@@ -1017,7 +1017,7 @@ final class AgentManager: ObservableObject {
         isAgentOperationInProgress = true
         defer { isAgentOperationInProgress = false }
         let s = installCursorHooks()
-        agentUserAlert = s.isEmpty ? "Cursor Hooks 已写入 ~/.cursor/hooks.json。" : s
+        agentUserAlert = s.isEmpty ? "Cursor Hooks written to ~/.cursor/hooks.json." : s
         refresh()
     }
 
@@ -1026,7 +1026,7 @@ final class AgentManager: ObservableObject {
         isAgentOperationInProgress = true
         defer { isAgentOperationInProgress = false }
         let s = installCodexHooks()
-        agentUserAlert = s.isEmpty ? "Codex Hooks 已写入 ~/.codex/config.toml。\n\n安装完成。请重启 Codex 终端或客户端后再使用。" : s
+        agentUserAlert = s.isEmpty ? "Codex Hooks written to ~/.codex/config.toml.\n\nInstallation complete. Restart the Codex terminal or client before use." : s
         refresh()
     }
 
@@ -1053,12 +1053,12 @@ final class AgentManager: ObservableObject {
         let s = installKimiHooks()
         agentUserAlert = s.isEmpty
             ? """
-            Kimi Hooks 已写入 ~/.kimi/config.toml。
+            Kimi Hooks written to ~/.kimi/config.toml.
 
-            **AhaKey 拨杆接管也会一并重打到本机 kimi-cli**。如果 kimi 当前已经打开，请**完全关闭并重新打开一次**；重开后，**拨杆 0/1 会直接接管当前会话的自动批准**，**不需要 `/reload`，也不需要 `/yolo`**。
-            以后若你**升级了 kimi-cli**，再次点击一次「安装 Kimi Hooks」即可把这层拨杆接管补回去，然后再重开一次 kimi。
+            **The AhaKey dial override will also be re-patched into the local kimi-cli**. If kimi is currently open, **fully quit and reopen it once**; after reopening, **dial 0/1 directly takes over auto-approval for the current session** — **no `/reload` and no `/yolo` needed**.
+            If you later **upgrade kimi-cli**, click "Install Kimi Hooks" once more to reapply this dial override layer, then reopen kimi again.
 
-            安装完成。Hooks 为 Beta，行为以官方文档为准。
+            Installation complete. Hooks are Beta; behavior follows the official documentation.
             """
             : s
         refresh()
@@ -1078,7 +1078,7 @@ final class AgentManager: ObservableObject {
         do {
             try FileManager.default.createDirectory(atPath: cursorDir, withIntermediateDirectories: true)
         } catch {
-            return "Cursor Hooks：无法创建目录 \(cursorDir)：\(error.localizedDescription)"
+            return "Cursor Hooks: could not create directory \(cursorDir): \(error.localizedDescription)"
         }
 
         var settings = loadCursorSettings() ?? [:]
@@ -1108,7 +1108,7 @@ final class AgentManager: ObservableObject {
             log.info("Cursor hooks 已写入")
             return ""
         }
-        return "Cursor Hooks：无法写入 \(cursorHooksPath)。请检查权限或磁盘空间。"
+        return "Cursor Hooks: could not write to \(cursorHooksPath). Check permissions or disk space."
     }
 
     private func installCodexHooks() -> String {
@@ -1116,7 +1116,7 @@ final class AgentManager: ObservableObject {
         do {
             try FileManager.default.createDirectory(atPath: codexDir, withIntermediateDirectories: true)
         } catch {
-            return "Codex Hooks：无法创建目录 \(codexDir)：\(error.localizedDescription)"
+            return "Codex Hooks: could not create directory \(codexDir): \(error.localizedDescription)"
         }
 
         var config = (try? String(contentsOfFile: codexConfigPath, encoding: .utf8)) ?? ""
@@ -1134,16 +1134,16 @@ final class AgentManager: ObservableObject {
                   written.contains(codexHookBlockStart),
                   written.contains(codexHookBlockEnd) else {
                 log.error("installCodexHooks: 写入后校验失败 \(self.codexConfigPath)")
-                return "Codex Hooks：已尝试写入 \(codexConfigPath)，但校验时未发现 AhaKey 标记块。请确认对「用户主目录 /.codex」有写权限，或关闭占用该文件的其它程序。"
+                return "Codex Hooks: attempted to write \(codexConfigPath), but the AhaKey marker block was not found during verification. Make sure \"~/.codex\" in the home directory is writable, or close other programs using the file."
             }
             log.info("Codex hooks 已写入 ~/.codex/config.toml")
             let cliRepair = repairCodexCliPathIfNeeded()
             return cliRepair.isEmpty
                 ? ""
-                : "Codex Hooks 已写入 ~/.codex/config.toml。\n\n\(cliRepair)\n\n安装完成。请重启 Codex 终端或客户端后再使用。"
+                : "Codex Hooks written to ~/.codex/config.toml.\n\n\(cliRepair)\n\nInstallation complete. Restart the Codex terminal or client before use."
         } catch {
             log.error("installCodexHooks: \(error.localizedDescription)")
-            return "Codex Hooks：无法写入 \(codexConfigPath)：\(error.localizedDescription)"
+            return "Codex Hooks: could not write to \(codexConfigPath): \(error.localizedDescription)"
         }
     }
 
@@ -1152,7 +1152,7 @@ final class AgentManager: ObservableObject {
             return ""
         }
         guard FileManager.default.isExecutableFile(atPath: codexAppCliPath) else {
-            return "未在 PATH 中找到 `codex` 命令，也未找到 Codex App 自带 CLI：\(codexAppCliPath)。Hook 配置已安装；若需在终端使用 Codex，请先安装或更新 Codex 客户端。"
+            return "The `codex` command was not found in PATH, and the Codex app's bundled CLI was not found either: \(codexAppCliPath). The hook configuration is installed; to use Codex in the terminal, install or update the Codex client first."
         }
 
         do {
@@ -1162,7 +1162,7 @@ final class AgentManager: ObservableObject {
             }
             try FileManager.default.createSymbolicLink(atPath: localCodexCliPath, withDestinationPath: codexAppCliPath)
         } catch {
-            return "检测到终端中 `codex` 不可用，但无法创建 \(localCodexCliPath)：\(error.localizedDescription)。Hook 配置已安装。"
+            return "Detected that `codex` is unavailable in the terminal, but could not create \(localCodexCliPath): \(error.localizedDescription). The hook configuration is installed."
         }
 
         let zshLine = #"export PATH="$HOME/.local/bin:$PATH""#
@@ -1180,13 +1180,13 @@ final class AgentManager: ObservableObject {
                 if !zshrc.isEmpty { zshrc += "\n" }
                 zshrc += zshLine + "\n"
                 try zshrc.write(toFile: zshrcPath, atomically: true, encoding: .utf8)
-                return "已检测到 Codex App 自带 CLI，并修复终端命令：\n\(localCodexCliPath) → \(codexAppCliPath)\n\n已将 `~/.local/bin` 加入 ~/.zshrc（若原文件存在，已备份为 ~/.zshrc.ahakey.bak）。"
+                return "Detected the Codex app's bundled CLI and repaired the terminal command:\n\(localCodexCliPath) → \(codexAppCliPath)\n\nAdded `~/.local/bin` to ~/.zshrc (if the file existed, it was backed up as ~/.zshrc.ahakey.bak)."
             }
         } catch {
-            return "已创建 \(localCodexCliPath)，但无法更新 ~/.zshrc：\(error.localizedDescription)。请手动把 `~/.local/bin` 加入 PATH。"
+            return "Created \(localCodexCliPath), but could not update ~/.zshrc: \(error.localizedDescription). Add `~/.local/bin` to PATH manually."
         }
 
-        return "已检测到 Codex App 自带 CLI，并创建终端命令：\n\(localCodexCliPath) → \(codexAppCliPath)"
+        return "Detected the Codex app's bundled CLI and created the terminal command:\n\(localCodexCliPath) → \(codexAppCliPath)"
     }
 
     private func isExecutableOnPath(_ command: String) -> Bool {
@@ -1208,21 +1208,21 @@ final class AgentManager: ObservableObject {
     private func removeCodexHooks() -> String {
         let path = codexConfigPath
         guard FileManager.default.fileExists(atPath: path) else {
-            return "未找到 \(path)，无需移除 Codex Hooks。"
+            return "\(path) not found; nothing to remove for Codex Hooks."
         }
         guard let config = try? String(contentsOfFile: path, encoding: .utf8) else {
-            return "无法读取 \(path)，请检查权限。"
+            return "Could not read \(path); check permissions."
         }
         let next = removeCodexHookBlock(from: config)
         guard next != config else {
-            return "在 \(path) 中未发现 AhaKey Codex hook 标记块。"
+            return "No AhaKey Codex hook marker block found in \(path)."
         }
         do {
             try next.write(toFile: path, atomically: true, encoding: .utf8)
             log.info("Codex hooks 中 AhaKey 标记块已移除")
-            return "已从 \(path) 移除 AhaKey Codex Hooks。"
+            return "Removed AhaKey Codex Hooks from \(path)."
         } catch {
-            return "已生成移除后的内容，但无法写回 \(path)：\(error.localizedDescription)"
+            return "Generated the updated content, but could not write it back to \(path): \(error.localizedDescription)"
         }
     }
 
@@ -1321,7 +1321,7 @@ final class AgentManager: ObservableObject {
         do {
             try FileManager.default.createDirectory(atPath: kimiDir, withIntermediateDirectories: true)
         } catch {
-            return "Kimi Hooks：无法创建目录 \(kimiDir)：\(error.localizedDescription)"
+            return "Kimi Hooks: could not create directory \(kimiDir): \(error.localizedDescription)"
         }
 
         var config = (try? String(contentsOfFile: kimiConfigPath, encoding: .utf8)) ?? ""
@@ -1338,7 +1338,7 @@ final class AgentManager: ObservableObject {
             return patchInstalledKimiCliForAhaKeyDialControl()
         } catch {
             log.error("installKimiHooks: \(error.localizedDescription)")
-            return "Kimi Hooks：无法写入 \(kimiConfigPath)：\(error.localizedDescription)"
+            return "Kimi Hooks: could not write to \(kimiConfigPath): \(error.localizedDescription)"
         }
     }
 
@@ -1356,9 +1356,9 @@ final class AgentManager: ObservableObject {
     private func patchInstalledKimiCliForAhaKeyDialControl() -> String {
         guard let targets = resolveKimiCliPatchTargets() else {
             return """
-            Kimi Hooks 已写入 ~/.kimi/config.toml，但**未找到可重打补丁的本机 kimi-cli 安装**。
+            Kimi Hooks written to ~/.kimi/config.toml, but **no local kimi-cli installation was found to patch**.
 
-            请确认终端里存在 `kimi` 命令；确认后再次点击「安装 Kimi Hooks」即可重试拨杆接管补丁。
+            Make sure the `kimi` command exists in the terminal, then click "Install Kimi Hooks" again to retry the dial override patch.
             """
         }
 
@@ -1370,10 +1370,10 @@ final class AgentManager: ObservableObject {
         } catch {
             log.error("patchInstalledKimiCliForAhaKeyDialControl: \(error.localizedDescription)")
             return """
-            Kimi Hooks 已写入 ~/.kimi/config.toml，但**本机 kimi-cli 拨杆接管补丁未完成**：
+            Kimi Hooks written to ~/.kimi/config.toml, but **the local kimi-cli dial override patch did not complete**:
             \(error.localizedDescription)
 
-            你可在确认 `kimi` 可执行后，再次点击「安装 Kimi Hooks」重试。
+            After confirming `kimi` is executable, click "Install Kimi Hooks" again to retry.
             """
         }
     }
@@ -1614,7 +1614,7 @@ final class AgentManager: ObservableObject {
                 throw NSError(
                     domain: "AhaKeyKimiPatch",
                     code: 1,
-                    userInfo: [NSLocalizedDescriptionKey: "未在 \(friendlyName) 中找到可替换的上游锚点，可能是 kimi-cli 版本已变。"]
+                    userInfo: [NSLocalizedDescriptionKey: "No replaceable upstream anchor found in \(friendlyName); the kimi-cli version may have changed."]
                 )
             }
             text = text.replacingOccurrences(of: old, with: new)
@@ -1627,21 +1627,21 @@ final class AgentManager: ObservableObject {
     private func removeKimiHooks() -> String {
         let path = kimiConfigPath
         guard FileManager.default.fileExists(atPath: path) else {
-            return "未找到 \(path)，无需移除 Kimi Hooks。"
+            return "\(path) not found; nothing to remove for Kimi Hooks."
         }
         guard let config = try? String(contentsOfFile: path, encoding: .utf8) else {
-            return "无法读取 \(path)，请检查权限。"
+            return "Could not read \(path); check permissions."
         }
         let next = removeLegacyKimiHookEntries(from: removeKimiHookBlock(from: config))
         guard next != config else {
-            return "在 \(path) 中未发现 AhaKey Kimi hook 标记块或旧版裸 hook。"
+            return "No AhaKey Kimi hook marker block or legacy bare hooks found in \(path)."
         }
         do {
             try next.write(toFile: path, atomically: true, encoding: .utf8)
             log.info("Kimi hooks 中 AhaKey 标记块与旧版裸 hook 已移除")
-            return "已从 \(path) 移除 AhaKey Kimi Hooks。"
+            return "Removed AhaKey Kimi Hooks from \(path)."
         } catch {
-            return "已生成移除后的内容，但无法写回 \(path)：\(error.localizedDescription)"
+            return "Generated the updated content, but could not write it back to \(path): \(error.localizedDescription)"
         }
     }
 
@@ -1724,13 +1724,13 @@ final class AgentManager: ObservableObject {
     private func performRemoveCursorHooksUserMessage(writeAndLog: Bool = true, preferCompactMessage: Bool = false) -> String {
         let path = cursorHooksPath
         guard FileManager.default.fileExists(atPath: path) else {
-            return "未找到用户级 \(path)。\n\n若你只在**项目**里合并过 `.cursor/hooks.json`，需在该项目根目录中手动编辑或删除 AhaKey 相关条目，用户级里本来就没有可卸内容。"
+            return "User-level \(path) not found.\n\nIf you only merged `.cursor/hooks.json` at the **project** level, manually edit or delete the AhaKey entries in that project root — there is nothing to remove at the user level."
         }
         guard var settings = loadCursorSettings() else {
-            return "无法解析 \(path)（非合法 JSON 或已损坏）。请用编辑器打开修正后再试，或从备份恢复。"
+            return "Could not parse \(path) (invalid JSON or corrupted). Open it in an editor to fix it and try again, or restore from a backup."
         }
         guard var hooks = settings["hooks"] as? [String: Any], !hooks.isEmpty else {
-            return "hooks.json 中无「hooks」或为空，没有可移除的 AhaKey 项。"
+            return "hooks.json has no \"hooks\" section or it is empty; there are no AhaKey entries to remove."
         }
 
         var removedCount = 0
@@ -1747,7 +1747,7 @@ final class AgentManager: ObservableObject {
         }
 
         if removedCount == 0 {
-            return "在 \(path) 中**未发现**包含 `ahakeyconfig-agent` 或 `ahakey-state` 的 `command`。\n\n若 Hook 在**项目级** `.cursor/hooks.json`，请在该仓库内手动删除；本按钮只改用户级 `~/.cursor/hooks.json`。"
+            return "**No** `command` containing `ahakeyconfig-agent` or `ahakey-state` was found in \(path).\n\nIf the hooks are in a **project-level** `.cursor/hooks.json`, delete them manually in that repository; this button only modifies the user-level `~/.cursor/hooks.json`."
         }
 
         if hooks.isEmpty {
@@ -1759,13 +1759,13 @@ final class AgentManager: ObservableObject {
         if writeAndLog {
             if !saveCursorSettings(settings) {
                 log.error("removeCursorHooks: 无法写回 hooks.json")
-                return "已删除内存中的 AhaKey 条目，但**无法写回** \(path)。请检查对「用户目录下 .cursor」的写权限，或关闭占用该文件的其他应用后重试。"
+                return "The AhaKey entries were removed in memory, but **could not be written back** to \(path). Check write permission for \".cursor\" in your home directory, or close other apps using the file and try again."
             }
             log.info("Cursor hooks: removed \(removedCount) ahakey command(s)")
         }
 
         if preferCompactMessage { return "" }
-        return "已从用户级 Cursor Hooks 中移除 AhaKey 相关条目（共 \(removedCount) 条子命令）。\n\n文件：\(path)\n\n若某仓库仍有**项目级** `.cursor/hooks.json` 且其中含有本工具，其优先级可能更高，需在该项目内同步删除或合并。"
+        return "Removed AhaKey entries from the user-level Cursor Hooks (\(removedCount) subcommands in total).\n\nFile: \(path)\n\nIf a repository still has a **project-level** `.cursor/hooks.json` containing this tool, it may take precedence and must be removed or merged within that project as well."
     }
 
     private func loadCursorSettings() -> [String: Any]? {

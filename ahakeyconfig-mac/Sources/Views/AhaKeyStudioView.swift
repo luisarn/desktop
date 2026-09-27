@@ -368,7 +368,7 @@ struct AhaKeyStudioView: View {
             Toggle("", isOn: Binding(
                 get: { ahaType.isEnabled },
                 set: { enabled in
-                    if enabled, !cloudAccount.isLoggedIn {
+                    if enabled, !ahaType.customBackendEnabled, !cloudAccount.isLoggedIn {
                         showsAhaTypeLoginRequiredToast = true
                     } else {
                         ahaType.setEnabled(enabled)
@@ -1095,8 +1095,8 @@ struct AhaKeyStudioView: View {
                     Divider()
 
                     if key.role == .voice {
-                        // ── 识别语言（对短按 / 长按都生效）───────────────
-                        SpeechLanguagePickerView(service: nativeSpeech)
+                        // ── 识别引擎 / 整理后端（对短按 / 长按都生效）─────
+                        VoiceBackendSettingsView(service: nativeSpeech, optimizer: ahaType)
 
                         Divider()
 

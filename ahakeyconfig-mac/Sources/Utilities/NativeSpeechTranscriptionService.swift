@@ -1,6 +1,7 @@
 import AppKit
 import AVFoundation
 import ApplicationServices
+import AhaKeyConfigShared
 import Foundation
 import Speech
 
@@ -62,6 +63,41 @@ final class NativeSpeechTranscriptionService: ObservableObject {
         ("ja-JP", "日本語"),
         ("ko-KR", "한국어"),
     ]
+
+    // MARK: 自定义 ASR（OpenAI 兼容 /audio/transcriptions，如 LiteLLM 代理的 Whisper）
+    private static let customASRKeyService = "lab.jawa.ahakeyconfig.asr-custom"
+    private static let customASRKeyAccount = "apiKey"
+
+    @Published var customASREnabled: Bool = UserDefaults.standard.object(forKey: "nativeSpeech.customASREnabled") as? Bool ?? false {
+        didSet { UserDefaults.standard.set(customASREnabled, forKey: "nativeSpeech.customASREnabled") }
+    }
+    @Published var customASRAPIBase: String = UserDefaults.standard.string(forKey: "nativeSpeech.customASRAPIBase") ?? "" {
+        didSet { UserDefaults.standard.set(customASRAPIBase, forKey: "nativeSpeech.customASRAPIBase") }
+    }
+    @Published var customASRModel: String = UserDefaults.standard.string(forKey: "nativeSpeech.customASRModel") ?? "" {
+        didSet { UserDefaults.standard.set(customASRModel, forKey: "nativeSpeech.customASRModel") }
+    }
+
+    var hasCustomASRKey: Bool {
+        !(AhaKeyKeychain.load(service: Self.customASRKeyService, account: Self.customASRKeyAccount) ?? "").isEmpty
+    }
+
+    func setCustomASRKey(_ key: String) {
+        do {
+            if key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                AhaKeyKeychain.delete(service: Self.customASRKeyService, account: Self.customASRKeyAccount)
+                appendDiagnostic("custom asr key cleared")
+            } else {
+                try AhaKeyKeychain.save(service: Self.customASRKeyService, account: Self.customASRKeyAccount, value: key)
+                appendDiagnostic("custom asr key saved")
+            }
+        } catch {
+            appendDiagnostic("custom asr key save failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// 自定义 ASR 模式下累积的录音缓冲（无流式预览，停止后整段上传）。
+    private var recordedBuffers: [AVAudioPCMBuffer] = []
 
     /// 当前是否处于长按录音模式（按住中，松手会直接发送）
     @Published private(set) var isLongPressRecording = false
@@ -365,6 +401,10 @@ final class NativeSpeechTranscriptionService: ObservableObject {
     func stopRecording(bypassAhaType: Bool) {
         guard isRecording else { return }
         isRecording = false
+        if customASREnabled {
+            stopCustomASRRecording(bypassAhaType: bypassAhaType)
+            return
+        }
         statusMessage = NSLocalizedString("正在结束录音并整理文字…", comment: "")
         VoiceStatusHUDController.shared.show(.recognizing)
         pendingFinalizeBypassAhaType = bypassAhaType
@@ -384,7 +424,115 @@ final class NativeSpeechTranscriptionService: ObservableObject {
         recognitionRequest?.endAudio()
     }
 
+    // MARK: 自定义 ASR 录音与上传
+
+    private func startCustomASRRecording() {
+        guard microphoneGranted else {
+            refreshPermissions(requestIfNeeded: true)
+            statusMessage = NSLocalizedString("自定义 ASR 需要麦克风权限，请先授权。", comment: "")
+            VoiceStatusHUDController.shared.show(
+                VoiceStatusHUDState(kind: .warning, title: NSLocalizedString("缺麦克风权限", comment: ""), subtitle: NSLocalizedString("授权后重试", comment: "")),
+                autoHideAfter: 2.0
+            )
+            appendDiagnostic("blocked custom asr start: mic not granted")
+            return
+        }
+        guard !customASRAPIBase.trimmingCharacters(in: .whitespaces).isEmpty,
+              !customASRModel.trimmingCharacters(in: .whitespaces).isEmpty else {
+            statusMessage = NSLocalizedString("请先在语音键设置里填写自定义 ASR 地址与模型。", comment: "")
+            VoiceStatusHUDController.shared.show(
+                VoiceStatusHUDState(kind: .warning, title: NSLocalizedString("未配置自定义 ASR", comment: ""), subtitle: NSLocalizedString("在语音键设置里填写地址与模型", comment: "")),
+                autoHideAfter: 2.4
+            )
+            appendDiagnostic("blocked custom asr start: missing base/model")
+            return
+        }
+
+        cancelRecognitionPipeline()
+        currentTranscript = ""
+        transcriptPreview = ""
+        lastCommittedText = ""
+        hasCommittedThisRecording = false
+        recordedBuffers = []
+
+        let engine = AVAudioEngine()
+        let inputNode = engine.inputNode
+        let format = inputNode.outputFormat(forBus: 0)
+        inputNode.removeTap(onBus: 0)
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+            self?.recordedBuffers.append(buffer)
+        }
+        do {
+            engine.prepare()
+            try engine.start()
+        } catch {
+            inputNode.removeTap(onBus: 0)
+            statusMessage = NSLocalizedString("无法启动麦克风录音。", comment: "")
+            appendDiagnostic("custom asr audio engine start failed: \(error.localizedDescription)")
+            return
+        }
+        audioEngine = engine
+        isRecording = true
+        statusMessage = NSLocalizedString("自定义接口录音中… 再按一次语音键结束。", comment: "")
+        VoiceStatusHUDController.shared.show(.recording)
+        appendDiagnostic("start custom asr recording base=\(customASRAPIBase) model=\(customASRModel)")
+    }
+
+    private func stopCustomASRRecording(bypassAhaType: Bool) {
+        finalizeWorkItem?.cancel()
+        finalizeWorkItem = nil
+        audioEngine?.stop()
+        audioEngine?.inputNode.removeTap(onBus: 0)
+        audioEngine = nil
+
+        let buffers = recordedBuffers
+        recordedBuffers = []
+        let apiBase = OpenAIAudioTranscription.normalizeBase(customASRAPIBase)
+        let model = customASRModel.trimmingCharacters(in: .whitespaces)
+        let apiKey = AhaKeyKeychain.load(service: Self.customASRKeyService, account: Self.customASRKeyAccount) ?? ""
+        appendDiagnostic("custom asr stop: buffers=\(buffers.count) key=\(apiKey.isEmpty ? "missing" : "present") base=\(apiBase) model=\(model)")
+
+        guard !buffers.isEmpty else {
+            statusMessage = NSLocalizedString("未识别到有效语音内容。", comment: "")
+            VoiceStatusHUDController.shared.show(.empty, autoHideAfter: 1.8)
+            return
+        }
+
+        statusMessage = NSLocalizedString("正在上传录音到自定义接口…", comment: "")
+        VoiceStatusHUDController.shared.show(.recognizing)
+        Task { @MainActor in
+            do {
+                let wav = try OpenAIAudioTranscription.wavData(from: buffers)
+                appendDiagnostic("custom asr uploading bytes=\(wav.count)")
+                let text = try await OpenAIAudioTranscription.transcribe(wavData: wav, apiBase: apiBase, model: model, apiKey: apiKey)
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else {
+                    statusMessage = NSLocalizedString("自定义 ASR 返回空文本。", comment: "")
+                    VoiceStatusHUDController.shared.show(.empty, autoHideAfter: 1.8)
+                    return
+                }
+                currentTranscript = trimmed
+                transcriptPreview = trimmed
+                appendDiagnostic("custom asr result=\(trimmed)")
+                finalizeCurrentTranscriptIfNeeded(reason: "custom_asr", bypassAhaType: bypassAhaType)
+            } catch {
+                cancelRecognitionPipeline()
+                statusMessage = String(format: NSLocalizedString("自定义 ASR 失败：%@", comment: ""), error.localizedDescription)
+                VoiceStatusHUDController.shared.show(
+                    VoiceStatusHUDState(kind: .warning, title: NSLocalizedString("识别失败", comment: ""), subtitle: NSLocalizedString("请检查自定义接口配置", comment: "")),
+                    autoHideAfter: 2.4
+                )
+                appendDiagnostic("custom asr error: \(error.localizedDescription)")
+            }
+        }
+    }
+
     private func startRecording() {
+        if customASREnabled {
+            startCustomASRRecording()
+            return
+        }
+
         guard microphoneGranted, speechRecognitionGranted, siriEnabled, dictationEnabled else {
             let micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
             let speechStatus = SFSpeechRecognizer.authorizationStatus()

@@ -17,6 +17,40 @@ final class AhaTypeTextOptimizer: ObservableObject {
         AhaKeyKeychain.load(service: keychainService, account: keychainAccount) ?? ""
     }
 
+    // MARK: 自定义整理后端（OpenAI 兼容 /chat/completions，如 LiteLLM、Ollama）
+    private static let customAPIKeyService = "lab.jawa.ahakeyconfig.ahatype-custom"
+    private static let customAPIKeyAccount = "apiKey"
+
+    @Published var customBackendEnabled: Bool = UserDefaults.standard.object(forKey: "ahatype.customBackendEnabled") as? Bool ?? false {
+        didSet { UserDefaults.standard.set(customBackendEnabled, forKey: "ahatype.customBackendEnabled") }
+    }
+    @Published var customAPIBase: String = UserDefaults.standard.string(forKey: "ahatype.customAPIBase") ?? "" {
+        didSet { UserDefaults.standard.set(customAPIBase, forKey: "ahatype.customAPIBase") }
+    }
+    @Published var customModel: String = UserDefaults.standard.string(forKey: "ahatype.customModel") ?? "" {
+        didSet { UserDefaults.standard.set(customModel, forKey: "ahatype.customModel") }
+    }
+    @Published var customSystemPrompt: String = UserDefaults.standard.string(forKey: "ahatype.customSystemPrompt") ?? AhaTypeTextOptimizer.defaultCustomSystemPrompt {
+        didSet { UserDefaults.standard.set(customSystemPrompt, forKey: "ahatype.customSystemPrompt") }
+    }
+
+    /// 默认整理提示词：保留原语言与原意，若是指令则整理成清晰的提示词。
+    static let defaultCustomSystemPrompt = NSLocalizedString(
+        "你是语音输入整理助手。把口述原文整理成简洁通顺的书面文本：去掉口头禅、重复和明显的识别错误；保留原意与原语言（中英混说则保持混说）；若内容是对 AI 编程助手的指令，整理成结构清晰、无歧义的提示词。只输出整理后的文本，不要任何解释或前后缀。",
+        comment: "")
+
+    var hasCustomAPIKey: Bool {
+        !(AhaKeyKeychain.load(service: Self.customAPIKeyService, account: Self.customAPIKeyAccount) ?? "").isEmpty
+    }
+
+    func setCustomAPIKey(_ key: String) {
+        if key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            AhaKeyKeychain.delete(service: Self.customAPIKeyService, account: Self.customAPIKeyAccount)
+        } else {
+            try? AhaKeyKeychain.save(service: Self.customAPIKeyService, account: Self.customAPIKeyAccount, value: key)
+        }
+    }
+
     private init() {
         refreshFromDisk()
     }
@@ -80,6 +114,10 @@ final class AhaTypeTextOptimizer: ObservableObject {
         guard isEnabled else {
             statusMessage = NSLocalizedString("AhaType 未启用，直接写入原始转写。", comment: "")
             return text
+        }
+
+        if customBackendEnabled {
+            return await processWithCustomBackend(source)
         }
 
         guard tokenIsStillValid(config["token_valid_until"]) else {
@@ -148,6 +186,61 @@ final class AhaTypeTextOptimizer: ObservableObject {
         }
     }
 
+    /// 自定义整理后端：OpenAI 兼容 /chat/completions（LiteLLM、Ollama 等）。失败时与云端路径一致，回退原始转写。
+    private func processWithCustomBackend(_ text: String) async -> String {
+        statusMessage = NSLocalizedString("自定义接口整理中…", comment: "")
+        let base = OpenAIAudioTranscription.normalizeBase(customAPIBase)
+        let model = customModel.trimmingCharacters(in: .whitespaces)
+        guard !base.isEmpty, !model.isEmpty, let url = URL(string: "\(base)/chat/completions") else {
+            statusMessage = NSLocalizedString("自定义整理接口未配置，直接写入原始转写。", comment: "")
+            return text
+        }
+
+        var request = URLRequest(url: url, timeoutInterval: 120)
+        request.httpMethod = "POST"
+        request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
+        let key = AhaKeyKeychain.load(service: Self.customAPIKeyService, account: Self.customAPIKeyAccount) ?? ""
+        if !key.trimmingCharacters(in: .whitespaces).isEmpty {
+            request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        }
+        let payload: [String: Any] = [
+            "model": model,
+            "messages": [
+                ["role": "system", "content": customSystemPrompt],
+                ["role": "user", "content": text],
+            ],
+            "temperature": 0.2,
+            "stream": false,
+        ]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: payload, options: [])
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+                let httpStatus = (response as? HTTPURLResponse)?.statusCode ?? 0
+                statusMessage = String(format: NSLocalizedString("自定义整理接口失败（HTTP %d），已写入原始转写。", comment: ""), httpStatus)
+                return text
+            }
+            guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let choices = object["choices"] as? [[String: Any]],
+                  let message = choices.first?["message"] as? [String: Any],
+                  let content = message["content"] as? String else {
+                statusMessage = NSLocalizedString("自定义整理接口返回异常，已写入原始转写。", comment: "")
+                return text
+            }
+            let polished = content.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !polished.isEmpty else {
+                statusMessage = NSLocalizedString("自定义整理接口返回空文本，已写入原始转写。", comment: "")
+                return text
+            }
+            statusMessage = NSLocalizedString("自定义接口已整理，准备粘贴。", comment: "")
+            return polished
+        } catch {
+            statusMessage = NSLocalizedString("自定义整理接口网络错误，已写入原始转写。", comment: "")
+            return text
+        }
+    }
+
     private func updateStatus(from config: [String: Any]) {
         let enabled = boolValue(config["typeless_enabled"])
         let token = storedAccessToken.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -155,6 +248,8 @@ final class AhaTypeTextOptimizer: ObservableObject {
 
         if !enabled {
             statusMessage = NSLocalizedString("AhaType 未启用。", comment: "")
+        } else if customBackendEnabled {
+            statusMessage = NSLocalizedString("AhaType 已开启（自定义整理接口）。", comment: "")
         } else if token.isEmpty {
             statusMessage = NSLocalizedString("AhaType 已开启，但尚未登录。", comment: "")
         } else if !valid {
@@ -163,18 +258,22 @@ final class AhaTypeTextOptimizer: ObservableObject {
             statusMessage = NSLocalizedString("AhaType 已开启，语音结果会先经云端整理。", comment: "")
         }
 
-        let daily = quotaLine(title: NSLocalizedString("日", comment: ""), used: config["used_daily"], limit: config["limit_daily"])
-        let weekly = quotaLine(title: NSLocalizedString("周", comment: ""), used: config["used_weekly"], limit: config["limit_weekly"])
-        let monthly = quotaLine(title: NSLocalizedString("月", comment: ""), used: config["used_monthly"], limit: config["limit_monthly"])
-        let validUntil = stringValue(config["token_valid_until"])
-        lastQuotaSummary = [daily, weekly, monthly]
-            .filter { !$0.isEmpty }
-            .joined(separator: " · ")
-        if !validUntil.isEmpty {
-            lastQuotaSummary += lastQuotaSummary.isEmpty ? String(format: NSLocalizedString("有效期 %@", comment: ""), validUntil) : String(format: NSLocalizedString(" · 有效期 %@", comment: ""), validUntil)
-        }
-        if lastQuotaSummary.isEmpty {
-            lastQuotaSummary = NSLocalizedString("暂无配额信息。", comment: "")
+        if customBackendEnabled && enabled {
+            lastQuotaSummary = NSLocalizedString("自定义整理接口，不占用云端配额。", comment: "")
+        } else {
+            let daily = quotaLine(title: NSLocalizedString("日", comment: ""), used: config["used_daily"], limit: config["limit_daily"])
+            let weekly = quotaLine(title: NSLocalizedString("周", comment: ""), used: config["used_weekly"], limit: config["limit_weekly"])
+            let monthly = quotaLine(title: NSLocalizedString("月", comment: ""), used: config["used_monthly"], limit: config["limit_monthly"])
+            let validUntil = stringValue(config["token_valid_until"])
+            lastQuotaSummary = [daily, weekly, monthly]
+                .filter { !$0.isEmpty }
+                .joined(separator: " · ")
+            if !validUntil.isEmpty {
+                lastQuotaSummary += lastQuotaSummary.isEmpty ? String(format: NSLocalizedString("有效期 %@", comment: ""), validUntil) : String(format: NSLocalizedString(" · 有效期 %@", comment: ""), validUntil)
+            }
+            if lastQuotaSummary.isEmpty {
+                lastQuotaSummary = NSLocalizedString("暂无配额信息。", comment: "")
+            }
         }
     }
 

@@ -1095,6 +1095,11 @@ struct AhaKeyStudioView: View {
                     Divider()
 
                     if key.role == .voice {
+                        // ── 识别语言（对短按 / 长按都生效）───────────────
+                        SpeechLanguagePickerView(service: nativeSpeech)
+
+                        Divider()
+
                         // ── 语音键触发方式 ──────────────────────────────
                         if selectedTriggerTab == 0 {
                             VStack(alignment: .leading, spacing: 10) {

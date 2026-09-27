@@ -34,6 +34,35 @@ final class NativeSpeechTranscriptionService: ObservableObject {
         didSet { UserDefaults.standard.set(longPressThresholdMs, forKey: "nativeSpeech.longPressThresholdMs") }
     }
 
+    // MARK: 识别语言配置
+    /// 转写识别语言（BCP-47），按目录顺序依次尝试；为空时回退系统首选语言。
+    /// 持久化为逗号分隔字符串，键名与 luis/cantonese-en 分支的 `speechLocales` 保持一致。
+    @Published var selectedSpeechLocales: [String] = {
+        guard let raw = UserDefaults.standard.string(forKey: "speechLocales") else { return [] }
+        // 旧版本把粤语写成 yue-HK，但苹果不支持该标识；迁移为 zh-HK。
+        let list = raw.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .map { $0 == "yue-HK" ? "zh-HK" : $0 }
+        UserDefaults.standard.set(list.joined(separator: ","), forKey: "speechLocales")
+        return list
+    }() {
+        didSet { UserDefaults.standard.set(selectedSpeechLocales.joined(separator: ","), forKey: "speechLocales") }
+    }
+
+    /// 常见可选语言目录（按回退顺序展示；label 为中文 key，英文由 en.lproj 翻译）。
+    /// 注意：苹果语音识别的粤语标识是 zh-HK / yue-CN，没有 yue-HK。
+    static let speechLocaleCatalog: [(id: String, label: String)] = [
+        ("zh-HK", NSLocalizedString("粤语（香港）", comment: "")),
+        ("yue-CN", NSLocalizedString("粤语（内地）", comment: "")),
+        ("zh-Hans", NSLocalizedString("普通话（简体）", comment: "")),
+        ("zh-TW", NSLocalizedString("国语（繁体）", comment: "")),
+        ("en-US", "English (US)"),
+        ("en-GB", "English (UK)"),
+        ("ja-JP", "日本語"),
+        ("ko-KR", "한국어"),
+    ]
+
     /// 当前是否处于长按录音模式（按住中，松手会直接发送）
     @Published private(set) var isLongPressRecording = false
 
@@ -598,6 +627,17 @@ final class NativeSpeechTranscriptionService: ObservableObject {
     }
 
     private func makeSpeechRecognizer() -> SFSpeechRecognizer? {
+        // 先按用户在 App 内选择的识别语言依次尝试（如粤语 yue-HK），
+        // 都不可用再回退系统首选语言，最后是系统默认。
+        for identifier in selectedSpeechLocales {
+            if let recognizer = SFSpeechRecognizer(locale: Locale(identifier: identifier)),
+               recognizer.isAvailable {
+                appendDiagnostic("using selected speech locale=\(identifier)")
+                return recognizer
+            }
+            appendDiagnostic("selected speech locale unavailable=\(identifier)")
+        }
+
         if let preferredIdentifier = Locale.preferredLanguages.first {
             let locale = Locale(identifier: preferredIdentifier)
             if let recognizer = SFSpeechRecognizer(locale: locale), recognizer.isAvailable {

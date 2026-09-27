@@ -74,6 +74,13 @@ if [[ -d "$APP_ROOT/Resources/DefaultOLED" ]]; then
   fi
 fi
 
+# 本地化资源：NSLocalizedString 以中文为 key，必须把 en.lproj / zh-Hans.lproj
+# 复制进 Contents/Resources/，否则切到英文后查不到翻译，只会原样显示中文 key。
+for LPROJ in "$APP_ROOT"/Resources/*.lproj; do
+  [[ -e "$LPROJ" ]] || continue
+  ditto "$LPROJ" "$APP_BUNDLE/Contents/Resources/$(basename "$LPROJ")"
+done
+
 # icon：只在缺失时生成，避免每次 Run 都跑一遍 iconutil
 if [[ ! -f "$APP_BUNDLE/Contents/Resources/AhaKeyConfig.icns" ]]; then
   echo "🎨 Generating app icon (first run)..."

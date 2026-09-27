@@ -21,6 +21,7 @@ struct AhaKeyStudioView: View {
     @State private var selectedPart: AhaKeyStudioPart
     @State private var lightBarPreview: IDEState
     @State private var modeCustomNames: [Int: String] = [:]
+    @State private var modeAgentAssignments: [Int: String] = [:]
     @State private var lastSyncDate: Date?
     @State private var syncStatusMessage = NSLocalizedString("修改会先保存在本地，连接设备后再同步。", comment: "")
     @State private var isSyncing = false
@@ -70,6 +71,7 @@ struct AhaKeyStudioView: View {
         _selectedPart = State(initialValue: .key1)
         _lightBarPreview = State(initialValue: .preToolUse)
         _modeCustomNames = State(initialValue: AhaKeyModeNameStore.load())
+        _modeAgentAssignments = State(initialValue: AhaKeyModeAgentStore.load())
     }
 
     var body: some View {
@@ -536,6 +538,77 @@ struct AhaKeyStudioView: View {
         editingModeSlot = nil
     }
 
+    /// 槽位 Agent 指派菜单：只改品牌（名字 + 内置 OLED 图），按键要用户显式点重置才套预设。
+    private var modeAgentMenu: some View {
+        Menu {
+            Section(String(format: NSLocalizedString("为 %@ 指派 Agent", comment: ""), selectedMode.title)) {
+                ForEach(AhaKeyAgentPreset.all) { agent in
+                    Button {
+                        assignAgent(agent, to: selectedMode)
+                    } label: {
+                        if agent.id == (modeAgentAssignments[selectedMode.rawValue]
+                            ?? AhaKeyModeAgentStore.legacyDefaultAgentId(for: selectedMode)) {
+                            Label(agent.displayName, systemImage: "checkmark")
+                        } else {
+                            Text(agent.displayName)
+                        }
+                    }
+                }
+            }
+            Section {
+                Button {
+                    applyAgentPresetBindings(to: selectedMode)
+                } label: {
+                    Label(NSLocalizedString("重置为该 Agent 预设按键", comment: ""), systemImage: "arrow.counterclockwise")
+                }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "switch.2")
+                    .imageScale(.small)
+                Text(AhaKeyModeAgentStore.assignedAgent(for: selectedMode)?.displayName
+                    ?? NSLocalizedString("指派 Agent", comment: ""))
+                    .font(.callout)
+            }
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help(NSLocalizedString("选择该 Mode 槽位对应的 AI Agent；会同步名称与内置 OLED 动图。", comment: ""))
+    }
+
+    private func assignAgent(_ agent: AhaKeyAgentPreset, to slot: AhaKeyModeSlot) {
+        // 用户没自定义过名字（或名字就是当前生效名）时，跟随新 Agent 命名
+        if modeCustomNames[slot.rawValue] == slot.name {
+            modeCustomNames.removeValue(forKey: slot.rawValue)
+            AhaKeyModeNameStore.save(modeCustomNames)
+        }
+        modeAgentAssignments[slot.rawValue] = agent.id
+        AhaKeyModeAgentStore.save(modeAgentAssignments)
+
+        // OLED：仅当槽位仍引用某个 bundle 素材（用户没自定义）时，改指到新 Agent 的素材
+        guard let newPath = agent.gifName.flatMap({ DefaultOLEDAssets.bundledAssetPath(forName: $0) }) else {
+            return
+        }
+        updateMode(slot) { m in
+            if let old = m.oled.localAssetPath, DefaultOLEDAssets.isBundledPath(old) {
+                m.oled.localAssetPath = newPath
+            }
+            m.oled.taskGIFAssets = m.oled.taskGIFAssets.map { asset in
+                var updated = asset
+                if let path = asset.localAssetPath, DefaultOLEDAssets.isBundledPath(path) {
+                    updated.localAssetPath = newPath
+                }
+                return updated
+            }
+        }
+    }
+
+    private func applyAgentPresetBindings(to slot: AhaKeyModeSlot) {
+        updateMode(slot) { draft in
+            draft = AhaKeyModeDraft.default(for: slot)
+        }
+    }
+
     private var modeEditorHeader: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 16) {
@@ -551,6 +624,8 @@ struct AhaKeyStudioView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color(nsColor: .separatorColor), lineWidth: 0.5))
                 .frame(width: 480)
+
+                modeAgentMenu
 
                 Spacer(minLength: 0)
             }

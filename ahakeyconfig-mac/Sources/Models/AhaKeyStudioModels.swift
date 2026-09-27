@@ -17,12 +17,8 @@ enum AhaKeyModeSlot: Int, CaseIterable, Codable, Identifiable {
     }
 
     var defaultName: String {
-        switch self {
-        case .mode0: "Claude"
-        case .mode1: "Cursor"
-        case .mode2: "Codex"
-        case .mode3: "custom"
-        }
+        AhaKeyModeAgentStore.assignedAgent(for: self)?.displayName
+            ?? AhaKeyModeAgentStore.legacyDefaultName(for: self)
     }
 
     var name: String {
@@ -30,37 +26,117 @@ enum AhaKeyModeSlot: Int, CaseIterable, Codable, Identifiable {
     }
 
     var subtitle: String {
-        switch self {
-        case .mode0:
-            NSLocalizedString("Claude Code · 终端权限 Y/N", comment: "")
-        case .mode1:
-            "Cursor · Composer Accept/Reject"
-        case .mode2:
-            "Codex · ↵ / Esc"
-        case .mode3:
-            NSLocalizedString("custom · 自定义模式", comment: "")
+        guard let agent = AhaKeyModeAgentStore.assignedAgent(for: self) else {
+            return NSLocalizedString("custom · 自定义模式", comment: "")
+        }
+        switch agent.style {
+        case .terminalYesNo:
+            return String(format: NSLocalizedString("%@ · 终端权限 Y/N", comment: ""), agent.displayName)
+        case .enterEscape:
+            return String(format: NSLocalizedString("%@ · 审批 ↵ / Esc", comment: ""), agent.displayName)
+        case .composerAcceptReject:
+            return String(format: NSLocalizedString("%@ · Composer Accept/Reject", comment: ""), agent.displayName)
+        case .custom:
+            return NSLocalizedString("custom · 自定义模式", comment: "")
         }
     }
 
     var guidance: String {
-        switch self {
-        case .mode0:
-            NSLocalizedString("针对 Claude Code 终端权限菜单：Key2 直接输入 Y（同意），Key3 直接输入 N（拒绝）。", comment: "")
-        case .mode1:
-            NSLocalizedString("针对 Cursor Composer / Agent：Key2 发 ↵、Key3 发 ⌫（与裸键一致）。", comment: "")
-        case .mode2:
-            NSLocalizedString("针对 Codex 终端审批：Key2 发送 ↵ 确认，Key3 发送 Esc 取消。", comment: "")
-        case .mode3:
-            NSLocalizedString("自定义模式：可自由配置所有按键和灯效。", comment: "")
+        guard let agent = AhaKeyModeAgentStore.assignedAgent(for: self) else {
+            return NSLocalizedString("自定义模式：可自由配置所有按键和灯效。", comment: "")
+        }
+        switch agent.style {
+        case .terminalYesNo:
+            return String(format: NSLocalizedString("针对 %@ 终端权限菜单：Key2 直接输入 Y（同意），Key3 用固件宏 ↓↓⏎ 选中 No（拒绝）。", comment: ""), agent.displayName)
+        case .enterEscape:
+            return String(format: NSLocalizedString("针对 %@ 终端审批：Key2 发送 ↵ 确认，Key3 发送 Esc 取消。", comment: ""), agent.displayName)
+        case .composerAcceptReject:
+            return NSLocalizedString("针对 Cursor Composer / Agent：Key2 发 ↵、Key3 发 ⌫（与裸键一致）。", comment: "")
+        case .custom:
+            return NSLocalizedString("自定义模式：可自由配置所有按键和灯效。", comment: "")
         }
     }
 
     var guidanceHoverDetail: String? {
-        switch self {
-        case .mode1:
-            return NSLocalizedString("若需与「⌘↵ 接受 / ⌘⌫ 拒绝」等组合键一致，请在编辑器里为对应键加修饰，并在 Cursor 设置 → Keyboard Shortcuts 中绑成相同组合。", comment: "")
-        case .mode0, .mode2, .mode3:
+        guard let agent = AhaKeyModeAgentStore.assignedAgent(for: self),
+              agent.style == .composerAcceptReject else {
             return nil
+        }
+        return NSLocalizedString("若需与「⌘↵ 接受 / ⌘⌫ 拒绝」等组合键一致，请在编辑器里为对应键加修饰，并在 Cursor 设置 → Keyboard Shortcuts 中绑成相同组合。", comment: "")
+    }
+}
+
+/// 可指派到 Mode 槽位的 AI Agent 预设（按键风格 + 内置 OLED 素材）。
+struct AhaKeyAgentPreset: Identifiable, Equatable {
+    enum Style {
+        case terminalYesNo         // 终端权限菜单：↵ = Yes，↓↓⏎ 宏 = No（Claude / Kimi Code / Qoder）
+        case enterEscape           // 审批：↵ 确认 / Esc 取消（Codex / OpenCode）
+        case composerAcceptReject  // Cursor Composer：↵ / ⌫
+        case custom
+    }
+
+    let id: String
+    let displayName: String
+    let gifName: String?
+    let style: Style
+
+    static let all: [AhaKeyAgentPreset] = [
+        AhaKeyAgentPreset(id: "claude", displayName: "Claude Code", gifName: "claude_0", style: .terminalYesNo),
+        AhaKeyAgentPreset(id: "cursor", displayName: "Cursor", gifName: "cursor", style: .composerAcceptReject),
+        AhaKeyAgentPreset(id: "codex", displayName: "Codex", gifName: "codex", style: .enterEscape),
+        AhaKeyAgentPreset(id: "kimi", displayName: "Kimi Code", gifName: "kimi", style: .terminalYesNo),
+        AhaKeyAgentPreset(id: "opencode", displayName: "OpenCode", gifName: "opencode", style: .enterEscape),
+        AhaKeyAgentPreset(id: "qoder", displayName: "Qoder", gifName: "qoder", style: .terminalYesNo),
+        AhaKeyAgentPreset(id: "custom", displayName: "custom", gifName: nil, style: .custom),
+    ]
+
+    static func preset(id: String) -> AhaKeyAgentPreset? {
+        all.first { $0.id == id }
+    }
+}
+
+/// 用户为每个 Mode 槽位指派的 Agent（slot rawValue -> agent id）。
+enum AhaKeyModeAgentStore {
+    private static let key = "ahakey.mode.agents.v1"
+
+    static func load() -> [Int: String] {
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let dict = try? JSONDecoder().decode([Int: String].self, from: data) else {
+            return [:]
+        }
+        return dict
+    }
+
+    static func save(_ agents: [Int: String]) {
+        guard let data = try? JSONEncoder().encode(agents) else { return }
+        UserDefaults.standard.set(data, forKey: key)
+    }
+
+    /// 出厂默认指派（未指派时的回退）。
+    static func legacyDefaultAgentId(for mode: AhaKeyModeSlot) -> String? {
+        switch mode {
+        case .mode0: "claude"
+        case .mode1: "cursor"
+        case .mode2: "codex"
+        case .mode3: "custom"
+        }
+    }
+
+    static func assignedAgentId(for mode: AhaKeyModeSlot) -> String? {
+        load()[mode.rawValue] ?? legacyDefaultAgentId(for: mode)
+    }
+
+    static func assignedAgent(for mode: AhaKeyModeSlot) -> AhaKeyAgentPreset? {
+        assignedAgentId(for: mode).flatMap { AhaKeyAgentPreset.preset(id: $0) }
+    }
+
+    /// custom 兜底显示用的旧命名。
+    static func legacyDefaultName(for mode: AhaKeyModeSlot) -> String {
+        switch mode {
+        case .mode0: "Claude"
+        case .mode1: "Cursor"
+        case .mode2: "Codex"
+        case .mode3: "custom"
         }
     }
 }
@@ -956,14 +1032,14 @@ struct AhaKeyOLEDDraft: Codable, Equatable {
 
     static func `default`(for mode: AhaKeyModeSlot) -> AhaKeyOLEDDraft {
         let statusLine: String
-        switch mode {
-        case .mode0:
-            statusLine = NSLocalizedString("Claude Code · 终端权限菜单 Y/N。", comment: "")
-        case .mode1:
-            statusLine = NSLocalizedString("Cursor · ↵ 接受改动 / ⌫ 拒绝改动。", comment: "")
-        case .mode2:
-            statusLine = NSLocalizedString("Codex · 审批 ↵ / Esc。", comment: "")
-        case .mode3:
+        switch AhaKeyModeAgentStore.assignedAgent(for: mode)?.style {
+        case .terminalYesNo:
+            statusLine = String(format: NSLocalizedString("%@ · 终端权限菜单 Y/N。", comment: ""), AhaKeyModeAgentStore.assignedAgent(for: mode)?.displayName ?? "Agent")
+        case .enterEscape:
+            statusLine = String(format: NSLocalizedString("%@ · 审批 ↵ / Esc。", comment: ""), AhaKeyModeAgentStore.assignedAgent(for: mode)?.displayName ?? "Agent")
+        case .composerAcceptReject:
+            statusLine = String(format: NSLocalizedString("%@ · ↵ 接受改动 / ⌫ 拒绝改动。", comment: ""), AhaKeyModeAgentStore.assignedAgent(for: mode)?.displayName ?? "Agent")
+        case .custom, nil:
             statusLine = NSLocalizedString("自定义模式。", comment: "")
         }
         let bundledPath = DefaultOLEDAssets.bundledAssetPath(for: mode)
@@ -1049,26 +1125,22 @@ struct AhaKeyModeDraft: Codable, Equatable, Identifiable {
         let approveDescription: String
         let rejectDescription: String
 
-        switch mode {
-        case .mode0:
-            // Yes 按 Enter；No 用固件原生宏 ↓↓⏎。
+        switch AhaKeyModeAgentStore.assignedAgent(for: mode)?.style {
+        case .terminalYesNo:
+            // Yes 按 Enter；No 用固件原生宏 ↓↓⏎。（Claude / Kimi Code / Qoder 终端权限菜单）
             approveShortcut = ShortcutBinding(keyCode: HIDUsage.enter)
             rejectShortcut = ShortcutBinding()
             rejectMacro = claudeNoMacroSteps
             approveDescription = "Yes"
             rejectDescription = "No"
-        case .mode1:
-            // 与固件 `defult_key_0_1` 等裸 HID 风格一致：单键 Enter / Backspace。若要用 Composer 默认 ⌘ 组合，由用户在编辑器中勾选 ⌘ 或改 Cursor 快捷键。
+        case .composerAcceptReject:
+            // 与固件裸 HID 风格一致：单键 Enter / Backspace。⌘ 组合由用户在编辑器中自行添加。
             approveShortcut = ShortcutBinding(keyCode: HIDUsage.enter)
             rejectShortcut = ShortcutBinding(keyCode: HIDUsage.backspace)
             approveDescription = "Accept"
             rejectDescription = "Reject"
-        case .mode2:
-            approveShortcut = ShortcutBinding(keyCode: HIDUsage.enter)
-            rejectShortcut = ShortcutBinding(keyCode: HIDUsage.escape)
-            approveDescription = "Accept"
-            rejectDescription = "Reject"
-        case .mode3:
+        case .enterEscape, .custom, nil:
+            // ↵ 确认 / Esc 取消（Codex / OpenCode / 自定义兜底）。
             approveShortcut = ShortcutBinding(keyCode: HIDUsage.enter)
             rejectShortcut = ShortcutBinding(keyCode: HIDUsage.escape)
             approveDescription = "Accept"

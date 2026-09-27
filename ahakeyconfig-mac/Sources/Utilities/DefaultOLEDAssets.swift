@@ -6,19 +6,10 @@ import Foundation
 enum DefaultOLEDAssets {
     private static let subdirectory = "DefaultOLED"
 
-    /// 每个 Mode 在工程里预置的出厂 GIF 文件名（不带扩展名）。
-    /// 没有内置素材的 Mode 返回 nil，走用户自定义或固件端默认动图。
+    /// 每个 Mode 的出厂 GIF 文件名（不带扩展名）——跟随槽位指派的 Agent；
+    /// 没有内置素材的 Agent（custom）返回 nil，走用户自定义或固件端默认动图。
     static func bundledFileName(for mode: AhaKeyModeSlot) -> String? {
-        switch mode {
-        case .mode0:
-            return "claude_0"
-        case .mode1:
-            return "cursor"
-        case .mode2:
-            return "codex"
-        case .mode3:
-            return nil
-        }
+        AhaKeyModeAgentStore.assignedAgent(for: mode)?.gifName
     }
 
     /// 解析出 bundle 内该 GIF 的绝对文件路径；资源不存在时返回 nil。

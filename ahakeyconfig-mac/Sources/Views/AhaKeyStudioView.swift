@@ -585,21 +585,13 @@ struct AhaKeyStudioView: View {
         modeAgentAssignments[slot.rawValue] = agent.id
         AhaKeyModeAgentStore.save(modeAgentAssignments)
 
-        // OLED：仅当槽位仍引用某个 bundle 素材（用户没自定义）时，改指到新 Agent 的素材
-        guard let newPath = agent.gifName.flatMap({ DefaultOLEDAssets.bundledAssetPath(forName: $0) }) else {
+        // OLED：指派带内置动图的 Agent 时，槽位 LCD 草稿直接重置为该 Agent 的出厂默认
+        //（覆盖 nil / 旧 bundle 图 / 用户旧上传），保证动画一定随指派写入键盘。
+        guard agent.gifName != nil else {
             return
         }
         updateMode(slot) { m in
-            if let old = m.oled.localAssetPath, DefaultOLEDAssets.isBundledPath(old) {
-                m.oled.localAssetPath = newPath
-            }
-            m.oled.taskGIFAssets = m.oled.taskGIFAssets.map { asset in
-                var updated = asset
-                if let path = asset.localAssetPath, DefaultOLEDAssets.isBundledPath(path) {
-                    updated.localAssetPath = newPath
-                }
-                return updated
-            }
+            m.oled = AhaKeyOLEDDraft.default(for: slot)
         }
 
         // Studio 正持有蓝牙时立即把新动画写进键盘；否则提示走「编辑配置」保存流程。

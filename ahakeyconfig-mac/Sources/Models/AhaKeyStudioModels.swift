@@ -81,7 +81,7 @@ struct AhaKeyAgentPreset: Identifiable, Equatable {
     let style: Style
 
     static let all: [AhaKeyAgentPreset] = [
-        AhaKeyAgentPreset(id: "claude", displayName: "Claude Code", gifName: "claude_0", style: .terminalYesNo),
+        AhaKeyAgentPreset(id: "claude", displayName: "Claude Code", gifName: "claude", style: .terminalYesNo),
         AhaKeyAgentPreset(id: "cursor", displayName: "Cursor", gifName: "cursor", style: .composerAcceptReject),
         AhaKeyAgentPreset(id: "codex", displayName: "Codex", gifName: "codex", style: .enterEscape),
         AhaKeyAgentPreset(id: "kimi", displayName: "Kimi Code", gifName: "kimi", style: .terminalYesNo),

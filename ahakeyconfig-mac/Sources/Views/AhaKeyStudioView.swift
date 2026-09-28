@@ -601,6 +601,39 @@ struct AhaKeyStudioView: View {
                 return updated
             }
         }
+
+        // Studio 正持有蓝牙时立即把新动画写进键盘；否则提示走「编辑配置」保存流程。
+        if isEditingConfiguration, bleManager.isConnected {
+            Task { await pushBundledOLED(for: slot) }
+        } else {
+            syncStatusMessage = String(format: NSLocalizedString("已指派 %@：进入「编辑配置」并保存后，新动画会写入键盘。", comment: ""), agent.displayName)
+        }
+    }
+
+    /// 把槽位当前指向的 bundle 动图覆盖上传到键盘（Agent 指派后立即生效，不管 slot 是否为空）。
+    private func pushBundledOLED(for slot: AhaKeyModeSlot) async {
+        guard bleManager.isConnected else { return }
+        guard let bundledPath = DefaultOLEDAssets.bundledAssetPath(for: slot),
+              let draftPath = studioDraft.draft(for: slot).oled.localAssetPath,
+              DefaultOLEDAssets.isBundledPath(draftPath) else { return }
+
+        let assetURL = URL(fileURLWithPath: bundledPath)
+        do {
+            try OLEDFrameEncoder.validateGIFSourceFileSize(at: assetURL)
+            let frames = try OLEDFrameEncoder.frames(fromGIFAt: assetURL)
+            let startIndex = try await resolveOLEDUploadStartIndex(for: slot, frameCount: frames.count)
+            try await bleManager.uploadOLEDFrames(
+                frames,
+                fps: studioDraft.draft(for: slot).oled.framesPerSecond,
+                mode: UInt8(slot.rawValue),
+                startIndex: UInt16(startIndex)
+            )
+            updateMode(slot) { m in
+                m.oled.statusLine = String(format: NSLocalizedString("已写入 %@ 动画（%d 帧）。", comment: ""), AhaKeyModeAgentStore.assignedAgent(for: slot)?.displayName ?? slot.title, frames.count)
+            }
+        } catch {
+            syncStatusMessage = String(format: NSLocalizedString("%@ 动画写入失败: %@", comment: ""), slot.title, error.localizedDescription)
+        }
     }
 
     private func applyAgentPresetBindings(to slot: AhaKeyModeSlot) {
@@ -2151,7 +2184,8 @@ struct AhaKeyStudioView: View {
                         guard key.macro.isEmpty else { return }
                         // Mode 0「No」键的 shortcut 故意为空，实际绑定是固件宏 ↓↓⏎；若仍用「空 shortcut → Enter 种子」，
                         // 从「单键」切回「宏」时会被误植成只按 Enter，覆盖用户刚配好的三键宏。
-                        if selectedMode == .mode0, key.role == .reject {
+                        // 槽位指派了终端 Y/N 型 Agent（Claude/Kimi/Qoder）时，宏种子用 ↓↓⏎，避免被误植成单键 Enter。
+                        if AhaKeyModeAgentStore.assignedAgent(for: selectedMode)?.style == .terminalYesNo, key.role == .reject {
                             key.macro = AhaKeyModeDraft.claudeNoMacroSteps.map { step in
                                 MacroStep(action: step.action, param: step.param)
                             }
